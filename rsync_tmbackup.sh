@@ -41,7 +41,7 @@ fn_find_backups() {
 fn_expire_backup() {
 	# Double-check that we're on a backup destination to be completely
 	# sure we're deleting the right folder
-	if [ -z "$(fn_find_backup_marker "$(dirname -- "$1")")" ]; then
+	if [ -z "$(fn_find_backup_marker "$(dirname "$1")")" ]; then
 		fn_log_error "$1 is not on a backup destination - aborting."
 		exit 1
 	fi
@@ -260,7 +260,7 @@ while : ; do
 	# -----------------------------------------------------------------------------
 
 	rm -rf -- "$DEST_FOLDER/latest"
-	ln -vs -- "$(basename -- "$DEST")" "$DEST_FOLDER/latest"
+	ln -s -- "$(basename "$DEST")" "$DEST_FOLDER/latest"
 
 	rm -f -- "$INPROGRESS_FILE"
 	rm -f -- "$LOG_FILE"
