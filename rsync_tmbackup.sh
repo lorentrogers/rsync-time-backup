@@ -48,6 +48,7 @@ fn_expire_backup() {
 
 	fn_log_info "Expiring $1"
 	rm -rf -- "$1"
+	rm -- "$1.log"
 }
 
 # -----------------------------------------------------------------------------
@@ -192,7 +193,7 @@ while : ; do
 	# Start backup
 	# -----------------------------------------------------------------------------
 
-	LOG_FILE="$PROFILE_FOLDER/$(date +"%Y-%m-%d-%H%M%S").log"
+	LOG_FILE="$DEST_FOLDER/$NOW.log"
 
 	fn_log_info "Starting backup..."
 	fn_log_info "From: $SRC_FOLDER"
@@ -262,8 +263,10 @@ while : ; do
 	rm -rf -- "$DEST_FOLDER/latest"
 	ln -s -- "$(basename "$DEST")" "$DEST_FOLDER/latest"
 
+	rm -rf -- "$DEST_FOLDER/latest.log"
+	ln -s -- "$(basename "$LOG_FILE")" "$DEST_FOLDER/latest.log"
+
 	rm -f -- "$INPROGRESS_FILE"
-	rm -f -- "$LOG_FILE"
 	
 	fn_log_info "Backup completed without errors."
 
