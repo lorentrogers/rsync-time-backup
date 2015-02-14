@@ -38,6 +38,14 @@ fn_find_backups() {
 	find "$DEST_FOLDER" -type d -name "????-??-??-??????" -prune | sort -r
 }
 
+fn_backup_marker_path() {
+	echo "$1/backup.marker"
+}
+
+fn_find_backup_marker() {
+	find "$(fn_backup_marker_path "$1")" 2>/dev/null
+}
+
 fn_expire_backup() {
 	# Double-check that we're on a backup destination to be completely
 	# sure we're deleting the right folder
@@ -75,9 +83,6 @@ done
 # -----------------------------------------------------------------------------
 
 # TODO: check that the destination supports hard links
-
-fn_backup_marker_path() { echo "$1/backup.marker"; }
-fn_find_backup_marker() { find "$(fn_backup_marker_path "$1")" 2>/dev/null; }
 
 if [ -z "$(fn_find_backup_marker "$DEST_FOLDER")" ]; then
 	fn_log_info "Safety check failed - the destination does not appear to be a backup folder or drive (marker file not found)."
