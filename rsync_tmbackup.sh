@@ -104,19 +104,10 @@ KEEP_ALL_DATE=$((EPOCH - 86400))       # 1 day ago
 KEEP_DAILIES_DATE=$((EPOCH - 2678400)) # 31 days ago
 
 export IFS=$'\n' # Better for handling spaces in filenames.
-PROFILE_FOLDER="$HOME/.$APPNAME"
 DEST="$DEST_FOLDER/$NOW"
 PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
 INPROGRESS_FILE="$DEST_FOLDER/backup.inprogress"
-
-# -----------------------------------------------------------------------------
-# Create profile folder if it doesn't exist
-# -----------------------------------------------------------------------------
-
-if [ ! -d "$PROFILE_FOLDER" ]; then
-	fn_log_info "Creating profile folder in '$PROFILE_FOLDER'..."
-	mkdir -- "$PROFILE_FOLDER"
-fi
+LOG_FILE="$DEST_FOLDER/$NOW.log"
 
 # -----------------------------------------------------------------------------
 # Handle case where a previous backup failed or was interrupted.
@@ -201,8 +192,6 @@ while : ; do
 	# -----------------------------------------------------------------------------
 	# Start backup
 	# -----------------------------------------------------------------------------
-
-	LOG_FILE="$DEST_FOLDER/$NOW.log"
 
 	fn_log_info "Starting backup..."
 	fn_log_info "From: $SRC_FOLDER"
