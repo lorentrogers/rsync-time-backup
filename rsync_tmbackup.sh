@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-APPNAME=$(basename $0 | sed "s/\.sh$//")
-
 # -----------------------------------------------------------------------------
 # Log functions
 # -----------------------------------------------------------------------------
@@ -38,21 +36,22 @@ fn_find_backups() {
 	find "$DEST_FOLDER" -type d -name "????-??-??-??????" -prune | sort -r
 }
 
-fn_backup_marker_path() {
-	echo "$1/backup.marker"
-}
-
-fn_find_backup_marker() {
-	find "$(fn_backup_marker_path "$1")" 2>/dev/null
+fn_check_backup_marker() {
+	#
+	# TODO: check that the destination supports hard links
+	#
+	if ! [ -f "$BACKUP_MARKER_FILE" ]; then
+		fn_log_error "Safety check failed - the destination does not appear to be a backup folder or drive (marker file not found)."
+		fn_log_info  "If it is indeed a backup folder, you may add the marker file by running the following command:"
+		fn_log_info  ""
+		fn_log_info  "mkdir -p -- \"$DEST_FOLDER\" ; touch \""$BACKUP_MARKER_FILE"\""
+		fn_log_info  ""
+		exit 1
+	fi
 }
 
 fn_expire_backup() {
-	# Double-check that we're on a backup destination to be completely
-	# sure we're deleting the right folder
-	if [ -z "$(fn_find_backup_marker "$(dirname "$1")")" ]; then
-		fn_log_error "$1 is not on a backup destination - aborting."
-		exit 1
-	fi
+	fn_check_backup_marker
 
 	fn_log_info "Expiring $1"
 	TMP_EMPTY_DIR="$(mktemp -d /tmp/emptydir.XXXXXX)"
@@ -60,8 +59,23 @@ fn_expire_backup() {
 	rmdir "$1" "$TMP_EMPTY_DIR"
 
 	fn_log_info "Expiring $1.log"
-	rm -f -- "$1.log"
+	rm -f -- "$LOG_DIR/$1.log"
 }
+
+# -----------------------------------------------------------------------------
+# basic variables
+# -----------------------------------------------------------------------------
+
+APPNAME=$(basename $0 | sed "s/\.sh$//")
+
+# Date logic
+NOW=$(date +"%Y-%m-%d-%H%M%S")
+EPOCH=$(date "+%s")
+KEEP_ALL_DATE=$((EPOCH - 86400))       # 1 day ago
+KEEP_DAILIES_DATE=$((EPOCH - 2678400)) # 31 days ago
+
+# Better for handling spaces in filenames.
+export IFS=$'\n'
 
 # -----------------------------------------------------------------------------
 # Source and destination information
@@ -78,41 +92,34 @@ if [[ "$ARG" == *"'"* ]]; then
 	fi
 done
 
+DEST="$DEST_FOLDER/$NOW"
+PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
+
 # -----------------------------------------------------------------------------
 # Check that the destination drive is a backup drive
 # -----------------------------------------------------------------------------
 
-# TODO: check that the destination supports hard links
+BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
+fn_check_backup_marker
 
-if [ -z "$(fn_find_backup_marker "$DEST_FOLDER")" ]; then
-	fn_log_info "Safety check failed - the destination does not appear to be a backup folder or drive (marker file not found)."
-	fn_log_info "If it is indeed a backup folder, you may add the marker file by running the following command:"
-	fn_log_info ""
-	fn_log_info "mkdir -p -- \"$DEST_FOLDER\" ; touch \"$(fn_backup_marker_path "$DEST_FOLDER")\""
-	fn_log_info ""
+# -----------------------------------------------------------------------------
+# logging & log files
+# -----------------------------------------------------------------------------
+
+LOG_DIR="$DEST_FOLDER/log"
+LOG_FILE="$LOG_DIR/$NOW.log"
+
+# make sure LOG_DIR exists
+if ! mkdir -p -- "$LOG_DIR"; then
+	fn_log_error "creation of directory $LOG_DIR failed."
 	exit 1
 fi
-
-# -----------------------------------------------------------------------------
-# Setup additional variables
-# -----------------------------------------------------------------------------
-
-# Date logic
-NOW=$(date +"%Y-%m-%d-%H%M%S")
-EPOCH=$(date "+%s")
-KEEP_ALL_DATE=$((EPOCH - 86400))       # 1 day ago
-KEEP_DAILIES_DATE=$((EPOCH - 2678400)) # 31 days ago
-
-export IFS=$'\n' # Better for handling spaces in filenames.
-DEST="$DEST_FOLDER/$NOW"
-PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
-INPROGRESS_FILE="$DEST_FOLDER/backup.inprogress"
-LOG_FILE="$DEST_FOLDER/$NOW.log"
 
 # -----------------------------------------------------------------------------
 # Handle case where a previous backup failed or was interrupted.
 # -----------------------------------------------------------------------------
 
+INPROGRESS_FILE="$DEST_FOLDER/backup.inprogress"
 if [ -f "$INPROGRESS_FILE" ]; then
 	if pgrep -F "$INPROGRESS_FILE" > /dev/null 2>&1 ; then
 		fn_log_error "Previous backup task is still active - aborting."
@@ -262,7 +269,7 @@ while : ; do
 	ln -s -- "$(basename "$DEST")" "$DEST_FOLDER/latest"
 
 	rm -f -- "$DEST_FOLDER/latest.log"
-	ln -s -- "$(basename "$LOG_FILE")" "$DEST_FOLDER/latest.log"
+	ln -s -- "log/$(basename "$LOG_FILE")" "$DEST_FOLDER/latest.log"
 
 	rm -f -- "$INPROGRESS_FILE"
 	
