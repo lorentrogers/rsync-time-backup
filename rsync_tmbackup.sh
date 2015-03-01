@@ -80,6 +80,7 @@ fn_mark_expired() {
 }
 
 fn_expire_backups() {
+	local EPOCH=$(fn_parse_date "$NOW")
 	local KEEP_ALL_DATE=$((EPOCH - 86400))       # 1 day ago
 	local KEEP_DAILIES_DATE=$((EPOCH - 2678400)) # 31 days ago
 
@@ -119,10 +120,7 @@ fn_delete_backups() {
 # -----------------------------------------------------------------------------
 
 readonly APPNAME=$(basename $0 | sed "s/\.sh$//")
-
-# Date logic
 readonly NOW=$(date +"%Y-%m-%d-%H%M%S")
-readonly EPOCH=$(date "+%s")
 
 # Better for handling spaces in filenames.
 export IFS=$'\n'
