@@ -80,32 +80,64 @@ fn_mark_expired() {
 }
 
 fn_expire_backups() {
-	local EPOCH=$(fn_parse_date "$NOW")
-	local KEEP_ALL_DATE=$((EPOCH - 86400))       # 1 day ago
-	local KEEP_DAILIES_DATE=$((EPOCH - 2678400)) # 31 days ago
+	local NOW_TS=$(fn_parse_date "$1")
 
-	# Default value for $PREV ensures that the most recent backup is never deleted.
-	local PREV="0000-00-00-000000"
+	local KEEP_ALL_TS=$((NOW_TS - 4 * 3600))	# all backups, for 4 hrs
+	local KEEP_1HR_TS=$((NOW_TS - 1 * 24 * 3600))	# max 24 per day, for 24 hrs
+	local KEEP_4HR_TS=$((NOW_TS - 3 * 24 * 3600))	# max  6 per day, for 3 days
+	local KEEP_8HR_TS=$((NOW_TS - 14 * 24 * 3600))	# max  3 per day, for 2 weeks
+	local KEEP_24HR_TS=$((NOW_TS - 28 * 24 * 3600))	# max  1 per day, for 4 weeks
+
+	# Default value for $PREV_DATE ensures that the most recent backup is never deleted.
+	local PREV_DATE="0000-00-00-000000"
 	local BACKUP
 	for BACKUP in $(fn_find_backups | sort -r); do
+
+		# BACKUP_DATE format YYYY-MM-DD-HHMMSS
 		local BACKUP_DATE=$(basename "$BACKUP")
-		local TIMESTAMP=$(fn_parse_date $BACKUP_DATE)
+		local BACKUP_TS=$(fn_parse_date $BACKUP_DATE)
+
+		local BACKUP_MONTH=${BACKUP_DATE:0:7}
+		local BACKUP_DAY=${BACKUP_DATE:0:10}
+		local BACKUP_HOUR=${BACKUP_DATE:11:2}
+		local BACKUP_HOUR=${BACKUP_HOUR#0}	# work around bash octal numbers
+		local PREV_MONTH=${PREV_DATE:0:7}
+		local PREV_DAY=${PREV_DATE:0:10}
+		local PREV_HOUR=${PREV_DATE:11:2}
+		local PREV_HOUR=${PREV_HOUR#0}		# work around bash octal numbers
 
 		# Skip if failed to parse date...
-		if [ -z "$TIMESTAMP" ]; then
+		if [ -z "$BACKUP_TS" ]; then
 			fn_log_warn "Could not parse date: $BACKUP"
 			continue
 		fi
-		if   [ $TIMESTAMP -ge $KEEP_ALL_DATE ]; then
+		if   [ $BACKUP_TS -ge $KEEP_ALL_TS ]; then
 			true
-		elif [ $TIMESTAMP -ge $KEEP_DAILIES_DATE ]; then
-			# Delete all but the most recent of each day.
-			[ "${BACKUP_DATE:0:10}" == "${PREV:0:10}" ] && fn_mark_expired "$BACKUP"
+		elif   [ $BACKUP_TS -ge $KEEP_1HR_TS ]; then
+			if [ "$BACKUP_DAY" == "$PREV_DAY" ] && \
+			   [ "$((BACKUP_HOUR / 1))" -eq "$((PREV_HOUR / 1))" ]; then
+				fn_mark_expired "$BACKUP"
+			fi
+		elif [ $BACKUP_TS -ge $KEEP_4HR_TS ]; then
+			if [ "$BACKUP_DAY" == "$PREV_DAY" ] && \
+			   [ "$((BACKUP_HOUR / 4))" -eq "$((PREV_HOUR / 4))" ]; then
+				fn_mark_expired "$BACKUP"
+			fi
+		elif [ $BACKUP_TS -ge $KEEP_8HR_TS ]; then
+			if [ "$BACKUP_DAY" == "$PREV_DAY" ] && \
+			   [ "$((BACKUP_HOUR / 8))" -eq "$((PREV_HOUR / 8))" ]; then
+				fn_mark_expired "$BACKUP"
+			fi
+		elif [ $BACKUP_TS -ge $KEEP_24HR_TS ]; then
+			if [ "$BACKUP_DAY" == "$PREV_DAY" ]; then
+				fn_mark_expired "$BACKUP"
+			fi
 		else
-			# Delete all but the most recent of each month.
-			[ "${BACKUP_DATE:0:7}" == "${PREV:0:7}" ] && fn_mark_expired "$BACKUP"
+			if [ "$BACKUP_MONTH" == "$PREV_MONTH" ]; then
+				fn_mark_expired "$BACKUP"
+			fi
 		fi
-		PREV=$BACKUP_DATE
+		PREV_DATE=$BACKUP_DATE
 	done
 }
 
@@ -195,7 +227,7 @@ fi
 # expire backups
 # -----------------------------------------------------------------------------
 
-fn_expire_backups
+fn_expire_backups "$NOW"
 
 # -----------------------------------------------------------------------------
 # Run in a loop to handle the "No space left on device" logic.
