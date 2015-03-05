@@ -256,7 +256,6 @@ while : ; do
 	fn_log_info "Starting backup..."
 	fn_log_info "From: $SRC_FOLDER"
 	fn_log_info "To:   $DEST"
-	fn_log_info "Running command:"
 	fn_log_info "$CMD"
 
 	eval $CMD
