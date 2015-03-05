@@ -235,6 +235,8 @@ while : ; do
 	CMD="$CMD --archive"
 	CMD="$CMD --itemize-changes"
 	CMD="$CMD --verbose"
+	CMD="$CMD --human-readable"
+	CMD="$CMD --delete --delete-excluded"
 	CMD="$CMD --log-file '$TMP_RSYNC_LOG'"
 
 	if [ -n "$EXCLUSION_FILE" ]; then
