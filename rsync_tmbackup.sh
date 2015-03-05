@@ -32,11 +32,8 @@ fn_parse_date() {
 }
 
 fn_mkdir() {
-	# make sure directory $1 exists
-	if mkdir -p -- "$1"; then
-		fn_log_info "Ensure that directory $1 exists."
-	else
-		fn_log_error "Creation of directory $1 failed."
+	if ! mkdir -p -- "$1"; then
+		fn_log_error "creation of directory $1 failed."
 		exit 1
 	fi
 }
@@ -70,6 +67,7 @@ fn_check_backup_marker() {
 fn_mark_expired() {
 	fn_check_backup_marker
 	fn_log_info "expiring backup $1"
+	fn_mkdir "$EXPIRED_DIR"
 	mv -- "$1" "$EXPIRED_DIR/"
 
 	local LOG="$LOG_DIR/$(basename "$1").log"
@@ -183,13 +181,9 @@ fn_check_backup_marker
 # subdirectories & files
 # -----------------------------------------------------------------------------
 
-DEST="$DEST_FOLDER/$NOW"
-PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
-
+readonly DEST="$DEST_FOLDER/$NOW"
 readonly INPROGRESS_FILE="$DEST_FOLDER/backup.inprogress"
-
 readonly EXPIRED_DIR="$DEST_FOLDER/expired"
-fn_mkdir "$EXPIRED_DIR"
 
 readonly LOG_DIR="$DEST_FOLDER/log"
 fn_mkdir "$LOG_DIR"
@@ -199,14 +193,16 @@ readonly LOG_FILE="$LOG_DIR/$NOW.log"
 # check for previous backup operations
 # -----------------------------------------------------------------------------
 
+PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
+
 if [ -f "$INPROGRESS_FILE" ]; then
 	if pgrep -F "$INPROGRESS_FILE" > /dev/null 2>&1 ; then
-		fn_log_error "Previous backup task is still active - aborting."
+		fn_log_error "previous backup task is still active - aborting."
 		exit 1
 	fi
 	echo "$$" > "$INPROGRESS_FILE"
 	if [ -d "$PREVIOUS_DEST" ]; then
-		fn_log_info "Previous backup $PREVIOUS_DEST failed or was interrupted - resuming from there."
+		fn_log_info "previous backup $PREVIOUS_DEST failed or was interrupted - resuming from there."
 
 		# - Last backup is moved to current backup folder so that it can be resumed.
 		# - 2nd to last backup becomes last backup.
@@ -260,10 +256,9 @@ while : ; do
 		# If the path is relative, it needs to be relative to the destination. To keep
 		# it simple, just use an absolute path. See http://serverfault.com/a/210058/118679
 		PREVIOUS_DEST="$(cd "$PREVIOUS_DEST"; pwd)"
-		fn_log_info "Previous backup found - doing incremental backup from $PREVIOUS_DEST"
+		fn_log_info "doing incremental backup from previous backup $PREVIOUS_DEST"
 		CMD="$CMD --link-dest='$PREVIOUS_DEST'"
 	fi
-
 	CMD="$CMD -- '$SRC_FOLDER/' '$DEST/'"
 	CMD="$CMD | grep -E '^deleting|[^/]$'"
 
