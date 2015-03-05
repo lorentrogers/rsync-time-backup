@@ -12,12 +12,13 @@ fn_log_error() { echo "$APPNAME: [ERROR] $1" 1>&2; }
 # Make sure everything really stops when CTRL+C is pressed
 # -----------------------------------------------------------------------------
 
-fn_terminate_script() {
-	fn_log_info "SIGINT caught."
-	exit 1
+fn_cleanup() {
+	if [ -n "$TMP_RSYNC_LOG" ]; then
+		rm -f -- $TMP_RSYNC_LOG
+	fi
 }
 
-trap 'fn_terminate_script' SIGINT
+trap fn_cleanup EXIT
 
 # -----------------------------------------------------------------------------
 # functions
@@ -69,12 +70,6 @@ fn_mark_expired() {
 	fn_log_info "expiring backup $1"
 	fn_mkdir "$EXPIRED_DIR"
 	mv -- "$1" "$EXPIRED_DIR/"
-
-	local LOG="$LOG_DIR/$(basename "$1").log"
-	if [ -f "$LOG" ]; then 
-		fn_log_info "expiring log $LOG"
-		mv -- "$LOG" "$EXPIRED_DIR/"
-	fi
 }
 
 fn_expire_backups() {
@@ -178,16 +173,13 @@ readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
 fn_check_backup_marker
 
 # -----------------------------------------------------------------------------
-# subdirectories & files
+# directories & files
 # -----------------------------------------------------------------------------
 
 readonly DEST="$DEST_FOLDER/$NOW"
 readonly INPROGRESS_FILE="$DEST_FOLDER/backup.inprogress"
 readonly EXPIRED_DIR="$DEST_FOLDER/expired"
-
-readonly LOG_DIR="$DEST_FOLDER/log"
-fn_mkdir "$LOG_DIR"
-readonly LOG_FILE="$LOG_DIR/$NOW.log"
+readonly TMP_RSYNC_LOG=$(mktemp "/tmp/${APPNAME}_XXXXXXXXXX")
 
 # -----------------------------------------------------------------------------
 # check for previous backup operations
@@ -234,10 +226,6 @@ while : ; do
 	# Start backup
 	# -----------------------------------------------------------------------------
 
-	fn_log_info "Starting backup..."
-	fn_log_info "From: $SRC_FOLDER"
-	fn_log_info "To:   $DEST"
-
 	CMD="rsync"
 	CMD="$CMD --compress"
 	CMD="$CMD --numeric-ids"
@@ -247,7 +235,8 @@ while : ; do
 	CMD="$CMD --archive"
 	CMD="$CMD --itemize-changes"
 	CMD="$CMD --verbose"
-	CMD="$CMD --log-file '$LOG_FILE'"
+	CMD="$CMD --log-file '$TMP_RSYNC_LOG'"
+
 	if [ -n "$EXCLUSION_FILE" ]; then
 		# We've already checked that $EXCLUSION_FILE doesn't contain a single quote
 		CMD="$CMD --exclude-from '$EXCLUSION_FILE'"
@@ -262,6 +251,9 @@ while : ; do
 	CMD="$CMD -- '$SRC_FOLDER/' '$DEST/'"
 	CMD="$CMD | grep -E '^deleting|[^/]$'"
 
+	fn_log_info "Starting backup..."
+	fn_log_info "From: $SRC_FOLDER"
+	fn_log_info "To:   $DEST"
 	fn_log_info "Running command:"
 	fn_log_info "$CMD"
 
@@ -272,7 +264,7 @@ while : ; do
 	# -----------------------------------------------------------------------------
 
 	# TODO: find better way to check for out of space condition without parsing log.
-	NO_SPACE_LEFT="$(grep "No space left on device (28)\|Result too large (34)" "$LOG_FILE")"
+	NO_SPACE_LEFT="$(grep "No space left on device (28)\|Result too large (34)" "$TMP_RSYNC_LOG")"
 
 	if [ -n "$NO_SPACE_LEFT" ]; then
 		if [ -z "$(fn_find_backups expired)" ]; then
@@ -299,11 +291,11 @@ done
 # Check whether rsync reported any errors
 # -----------------------------------------------------------------------------
 
-if [ -n "$(grep "rsync:" "$LOG_FILE")" ]; then
-	fn_log_warn "Rsync reported a warning, please check '$LOG_FILE' for more details."
+if [ -n "$(grep "rsync:" "$TMP_RSYNC_LOG")" ]; then
+	fn_log_warn "Rsync reported a warning, please check '$TMP_RSYNC_LOG' for more details."
 fi
-if [ -n "$(grep "rsync error:" "$LOG_FILE")" ]; then
-	fn_log_error "Rsync reported an error, please check '$LOG_FILE' for more details."
+if [ -n "$(grep "rsync error:" "$TMP_RSYNC_LOG")" ]; then
+	fn_log_error "Rsync reported an error, please check '$TMP_RSYNC_LOG' for more details."
 	exit 1
 fi
 
@@ -311,9 +303,8 @@ fi
 # Add symlink to last successful backup
 # -----------------------------------------------------------------------------
 
-rm -f -- "$DEST_FOLDER/latest" "$DEST_FOLDER/latest.log"
+rm -f -- "$DEST_FOLDER/latest"
 ln -s -- "$(basename "$DEST")" "$DEST_FOLDER/latest"
-ln -s -- "log/$(basename "$LOG_FILE")" "$DEST_FOLDER/latest.log"
 
 # -----------------------------------------------------------------------------
 # delete expired backups
@@ -322,11 +313,10 @@ ln -s -- "log/$(basename "$LOG_FILE")" "$DEST_FOLDER/latest.log"
 fn_delete_backups
 
 # -----------------------------------------------------------------------------
-# clean up and exit
+# exit
 # -----------------------------------------------------------------------------
 
 rm -f -- "$INPROGRESS_FILE"
 
 fn_log_info "Backup completed without errors."
-
 exit 0
