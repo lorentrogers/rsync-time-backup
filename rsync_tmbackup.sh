@@ -226,6 +226,10 @@ while : ; do
 	# Start backup
 	# -----------------------------------------------------------------------------
 
+	fn_log_info "Starting backup..."
+	fn_log_info "From: $SRC_FOLDER"
+	fn_log_info "To:   $DEST"
+
 	CMD="rsync"
 	CMD="$CMD --compress"
 	CMD="$CMD --numeric-ids"
@@ -253,9 +257,6 @@ while : ; do
 	CMD="$CMD -- '$SRC_FOLDER/' '$DEST/'"
 	CMD="$CMD | grep -E '^deleting|[^/]$'"
 
-	fn_log_info "Starting backup..."
-	fn_log_info "From: $SRC_FOLDER"
-	fn_log_info "To:   $DEST"
 	fn_log_info "$CMD"
 
 	eval $CMD
