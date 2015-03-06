@@ -9,8 +9,23 @@ fn_log_warn()  { echo "$APPNAME: [WARNING] $1" 1>&2; }
 fn_log_error() { echo "$APPNAME: [ERROR] $1" 1>&2; }
 
 # -----------------------------------------------------------------------------
-# Make sure everything really stops when CTRL+C is pressed
+# traps
 # -----------------------------------------------------------------------------
+
+# ---
+# Make sure everything really stops when CTRL+C is pressed
+# ---
+
+fn_terminate_script() {
+       fn_log_info "SIGINT caught."
+       exit 1
+}
+
+trap fn_terminate_script SIGINT
+
+# ---
+# clean up on exit
+# ---
 
 fn_cleanup() {
 	if [ -n "$TMP_RSYNC_LOG" ]; then
@@ -144,7 +159,7 @@ fn_delete_backups() {
 # basic variables
 # -----------------------------------------------------------------------------
 
-readonly APPNAME=$(basename $0 | sed "s/\.sh$//")
+readonly APPNAME=$(basename ${0%.sh})
 readonly NOW=$(date +"%Y-%m-%d-%H%M%S")
 
 # Better for handling spaces in filenames.
