@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+readonly APPNAME=$(basename ${0%.sh})
+
 # -----------------------------------------------------------------------------
 # Log functions
 # -----------------------------------------------------------------------------
@@ -39,6 +41,28 @@ trap fn_cleanup EXIT
 # functions
 # -----------------------------------------------------------------------------
 
+fn_usage() {
+	echo "Usage: $APPNAME [OPTIONS] command [ARGS]"
+	echo
+	echo "Commands:"
+	echo
+	echo "  init <backup_location>"
+	echo "      initialize <backup_location> by creating a backup marker file"
+	echo
+	echo "  backup <src_location> <backup_location> [<exclude_file>]"
+	echo "      create a Time Machine like backup from <src_location> at <backup_location>."
+	echo "      optional: exclude files in <exclude_file> from backup"
+	echo
+	echo "Options:"
+	echo
+	echo "  -v, --verbose"
+	echo "      increase verbosity"
+	echo
+	echo "  -h, --help"
+	echo "      this help text"
+	echo
+}
+
 fn_parse_date() {
 	# Converts YYYY-MM-DD-HHMMSS to YYYY-MM-DD HH:MM:SS and then to Unix Epoch.
 	case "$OSTYPE" in
@@ -66,18 +90,20 @@ fn_check_backup_marker() {
 	#
 	# TODO: check that the destination supports hard links
 	#
-	if [ -f "$BACKUP_MARKER_FILE" ]; then
-		if ! touch -c "$BACKUP_MARKER_FILE"; then
-			fn_log_error "no write permission for this backup location - aborting."
-			exit 1
-		fi
-	else
+	if [ ! -f "$BACKUP_MARKER_FILE" ]; then
 		fn_log_error "Destination does not appear to be a backup location - no backup marker file found."
-		fn_log_error  "If it is indeed a backup folder, you may add the marker file by running the following command:"
-		fn_log_error  ""
-		fn_log_error  "mkdir -p -- \"$DEST_FOLDER\" ; touch \""$BACKUP_MARKER_FILE"\""
 		exit 1
 	fi
+	if ! touch -c "$BACKUP_MARKER_FILE"; then
+		fn_log_error "no write permission for this backup location - aborting."
+		exit 1
+	fi
+}
+
+fn_set_backup_marker() {
+	fn_mkdir "$DEST_FOLDER"
+	touch "$BACKUP_MARKER_FILE"
+	fn_log_info "Backup marker $BACKUP_MARKER_FILE created"
 }
 
 fn_mark_expired() {
@@ -156,48 +182,96 @@ fn_delete_backups() {
 }
 
 # -----------------------------------------------------------------------------
-# basic variables
+# parse command line arguments
 # -----------------------------------------------------------------------------
 
-readonly APPNAME=$(basename ${0%.sh})
+# set defaults
+OPT_VERBOSE=false
+
+# parse arguments
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		-h|--help)
+			fn_usage
+			exit 0
+		;;
+		-v|--verbose)
+			OPT_VERBOSE=true
+		;;
+		init)
+			if [ "$#" -ne 2 ]; then
+				echo "Wrong number of arguments for command '$1'." 1>&2
+				exit 1
+			fi
+			readonly DEST_FOLDER="${2%/}"
+			if [ ! -d "$DEST_FOLDER" ]; then
+			       fn_log_error "backup location $DEST_FOLDER does not exist"
+			       exit 1
+			fi
+			readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
+			fn_set_backup_marker
+			exit 0
+		;;
+		backup)
+			if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
+				echo "Wrong number of arguments for command '$1'." 1>&2
+				exit 1
+			fi
+			readonly SRC_FOLDER="${2%/}"
+			readonly DEST_FOLDER="${3%/}"
+			readonly EXCLUSION_FILE="$4"
+			if [ ! -d "$SRC_FOLDER" ]; then
+			       fn_log_error "source location $SRC_FOLDER does not exist."
+			       exit 1
+			fi
+			if [ ! -d "$DEST_FOLDER" ]; then
+			       fn_log_error "backup location $DEST_FOLDER does not exist."
+			       exit 1
+			fi
+			for ARG in "$SRC_FOLDER" "$DEST_FOLDER" "$EXCLUSION_FILE"; do
+				if [[ "$ARG" == *"'"* ]]; then
+					fn_log_error "Arguments may not have any single quote characters."
+					exit 1
+				fi
+			done
+			break
+		;;
+		*)
+			echo "Invalid argument '$1'. Use --help for more information." 1>&2
+			exit 1
+		;;
+	esac
+	shift
+done
+
+if [ "$#" -eq 0 ]; then
+        echo "Usage: $APPNAME [OPTIONS] command [ARGS]"
+        echo "Try '$APPNAME --help' for more information."
+        exit 0
+fi
+
+# -----------------------------------------------------------------------------
+# BACKUP: basic variables
+# -----------------------------------------------------------------------------
+
 readonly NOW=$(date +"%Y-%m-%d-%H%M%S")
+readonly DEST="$DEST_FOLDER/$NOW"
+readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
+readonly INPROGRESS_FILE="$DEST_FOLDER/backup.inprogress"
+readonly EXPIRED_DIR="$DEST_FOLDER/expired"
+readonly TMP_RSYNC_LOG=$(mktemp "/tmp/${APPNAME}_XXXXXXXXXX")
 
 # Better for handling spaces in filenames.
 export IFS=$'\n'
 
 # -----------------------------------------------------------------------------
-# Source and destination information
-# -----------------------------------------------------------------------------
-
-readonly SRC_FOLDER="${1%/}"
-readonly DEST_FOLDER="${2%/}"
-readonly EXCLUSION_FILE="$3"
-
-for ARG in "$SRC_FOLDER" "$DEST_FOLDER" "$EXCLUSION_FILE"; do
-	if [[ "$ARG" == *"'"* ]]; then
-		fn_log_error 'Arguments may not have any single quote characters.'
-		exit 1
-	fi
-done
-
-# -----------------------------------------------------------------------------
 # Check that the destination directory is a backup location
 # -----------------------------------------------------------------------------
 
-readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
 fn_check_backup_marker
 
 # -----------------------------------------------------------------------------
-# directories & files
-# -----------------------------------------------------------------------------
-
-readonly DEST="$DEST_FOLDER/$NOW"
-readonly INPROGRESS_FILE="$DEST_FOLDER/backup.inprogress"
-readonly EXPIRED_DIR="$DEST_FOLDER/expired"
-readonly TMP_RSYNC_LOG=$(mktemp "/tmp/${APPNAME}_XXXXXXXXXX")
-
-# -----------------------------------------------------------------------------
-# check for previous backup operations
+# Check for previous backup operations
 # -----------------------------------------------------------------------------
 
 PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
