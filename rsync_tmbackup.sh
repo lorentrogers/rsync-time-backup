@@ -100,7 +100,7 @@ fn_check_backup_marker() {
 		fn_log_error "Destination does not appear to be a backup location - no backup marker file found."
 		exit 1
 	fi
-	if ! touch -c "$BACKUP_MARKER_FILE"; then
+	if ! touch -c "$BACKUP_MARKER_FILE" &> /dev/null ; then
 		fn_log_error "no write permission for this backup location - aborting."
 		exit 1
 	fi
