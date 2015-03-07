@@ -103,12 +103,11 @@ fn_check_backup_marker() {
 fn_set_backup_marker() {
 	fn_mkdir "$DEST_FOLDER"
 	touch "$BACKUP_MARKER_FILE"
-	fn_log_info "Backup marker $BACKUP_MARKER_FILE created"
+	fn_log_info "Backup marker $BACKUP_MARKER_FILE created."
 }
 
 fn_mark_expired() {
 	fn_check_backup_marker
-	fn_log_info "expiring backup $1"
 	fn_mkdir "$EXPIRED_DIR"
 	mv -- "$1" "$EXPIRED_DIR/"
 }
@@ -151,24 +150,39 @@ fn_expire_backups() {
 			if [ "$BACKUP_DAY" == "$PREV_DAY" ] && \
 			   [ "$((BACKUP_HOUR / 1))" -eq "$((PREV_HOUR / 1))" ]; then
 				fn_mark_expired "$BACKUP"
+				fn_log_info "backup $BACKUP_DATE 01HR expired"
+			else
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 01HR retained"
 			fi
 		elif [ $BACKUP_TS -ge $KEEP_4HR_TS ]; then
 			if [ "$BACKUP_DAY" == "$PREV_DAY" ] && \
 			   [ "$((BACKUP_HOUR / 4))" -eq "$((PREV_HOUR / 4))" ]; then
 				fn_mark_expired "$BACKUP"
+				fn_log_info "backup $BACKUP_DATE 04HR expired"
+			else
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 04HR retained"
 			fi
 		elif [ $BACKUP_TS -ge $KEEP_8HR_TS ]; then
 			if [ "$BACKUP_DAY" == "$PREV_DAY" ] && \
 			   [ "$((BACKUP_HOUR / 8))" -eq "$((PREV_HOUR / 8))" ]; then
 				fn_mark_expired "$BACKUP"
+				fn_log_info "backup $BACKUP_DATE 08HR expired"
+			else
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 08HR retained"
 			fi
 		elif [ $BACKUP_TS -ge $KEEP_24HR_TS ]; then
 			if [ "$BACKUP_DAY" == "$PREV_DAY" ]; then
 				fn_mark_expired "$BACKUP"
+				fn_log_info "backup $BACKUP_DATE 24HR expired"
+			else
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 24HR retained"
 			fi
 		else
 			if [ "$BACKUP_MONTH" == "$PREV_MONTH" ]; then
 				fn_mark_expired "$BACKUP"
+				fn_log_info "backup $BACKUP_DATE  ALL expired"
+			else
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE  ALL retained"
 			fi
 		fi
 		PREV_DATE=$BACKUP_DATE
@@ -186,7 +200,7 @@ fn_delete_backups() {
 # -----------------------------------------------------------------------------
 
 # set defaults
-OPT_VERBOSE=false
+OPT_VERBOSE="false"
 
 # parse arguments
 while [ "$#" -gt 0 ]; do
@@ -196,7 +210,7 @@ while [ "$#" -gt 0 ]; do
 			exit 0
 		;;
 		-v|--verbose)
-			OPT_VERBOSE=true
+			OPT_VERBOSE="true"
 		;;
 		init)
 			if [ "$#" -ne 2 ]; then
@@ -304,6 +318,7 @@ fi
 # expire backups
 # -----------------------------------------------------------------------------
 
+fn_log_info "expiring backups..."
 fn_expire_backups "$NOW"
 
 # -----------------------------------------------------------------------------
