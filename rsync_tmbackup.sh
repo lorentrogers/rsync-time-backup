@@ -46,14 +46,15 @@ fn_usage() {
 	echo
 	echo "Commands:"
 	echo
-	echo "  init <backup_location>"
-	echo "      initialize <backup_location> by creating a backup marker file"
+	echo "  init <backup_location> [--utc]"
+	echo "      initialize <backup_location> by creating a backup marker file."
+	echo "      if --utc is added all future backups will be created with UTC time."
 	echo
 	echo "  backup <src_location> <backup_location> [<exclude_file>]"
 	echo "      create a Time Machine like backup from <src_location> at <backup_location>."
 	echo "      optional: exclude files in <exclude_file> from backup"
 	echo
-	echo "Options:"
+	echo "General options:"
 	echo
 	echo "  -v, --verbose"
 	echo "      increase verbosity"
@@ -64,10 +65,15 @@ fn_usage() {
 }
 
 fn_parse_date() {
+	if [ "$UTC" == "true" ]; then
+		local DATE_OPTION="-u"
+	else
+		local DATE_OPTION=""
+	fi
 	# Converts YYYY-MM-DD-HHMMSS to YYYY-MM-DD HH:MM:SS and then to Unix Epoch.
 	case "$OSTYPE" in
-		darwin*) date -j -f "%Y-%m-%d-%H%M%S" "$1" "+%s" ;;
-		*) date -d "${1:0:10} ${1:11:2}:${1:13:2}:${1:15:2}" +%s ;;
+		darwin*) date $DATE_OPTION -j -f "%Y-%m-%d-%H%M%S" "$1" "+%s" ;;
+		*) date $DATE_OPTION -d "${1:0:10} ${1:11:2}:${1:13:2}:${1:15:2}" +%s ;;
 	esac
 }
 
@@ -98,11 +104,20 @@ fn_check_backup_marker() {
 		fn_log_error "no write permission for this backup location - aborting."
 		exit 1
 	fi
+	if [ "$(cat "$BACKUP_MARKER_FILE")" == "UTC" ]; then
+		UTC="true"
+	else
+		UTC="false"
+	fi
 }
 
 fn_set_backup_marker() {
 	fn_mkdir "$DEST_FOLDER"
-	touch "$BACKUP_MARKER_FILE"
+	if [ "$1" == "UTC" ]; then
+		echo "UTC" >> "$BACKUP_MARKER_FILE"
+	else
+		touch "$BACKUP_MARKER_FILE"
+	fi
 	fn_log_info "Backup marker $BACKUP_MARKER_FILE created."
 }
 
@@ -213,7 +228,7 @@ while [ "$#" -gt 0 ]; do
 			OPT_VERBOSE="true"
 		;;
 		init)
-			if [ "$#" -ne 2 ]; then
+			if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
 				echo "Wrong number of arguments for command '$1'." 1>&2
 				exit 1
 			fi
@@ -223,7 +238,11 @@ while [ "$#" -gt 0 ]; do
 			       exit 1
 			fi
 			readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
-			fn_set_backup_marker
+			if [ "$3" == "--utc" ]; then
+				fn_set_backup_marker "UTC"
+			else
+				fn_set_backup_marker
+			fi
 			exit 0
 		;;
 		backup)
@@ -265,24 +284,30 @@ if [ "$#" -eq 0 ]; then
 fi
 
 # -----------------------------------------------------------------------------
+# Check that the destination directory is a backup location
+# -----------------------------------------------------------------------------
+
+readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
+# this function sets variable $UTC dependent on backup marker content
+fn_check_backup_marker
+
+# -----------------------------------------------------------------------------
 # BACKUP: basic variables
 # -----------------------------------------------------------------------------
 
-readonly NOW=$(date +"%Y-%m-%d-%H%M%S")
+if [ "$UTC" == "true" ]; then
+	readonly NOW=$(date -u +"%Y-%m-%d-%H%M%S")
+else
+	readonly NOW=$(date +"%Y-%m-%d-%H%M%S")
+fi
+
 readonly DEST="$DEST_FOLDER/$NOW"
-readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
 readonly INPROGRESS_FILE="$DEST_FOLDER/backup.inprogress"
 readonly EXPIRED_DIR="$DEST_FOLDER/expired"
 readonly TMP_RSYNC_LOG=$(mktemp "/tmp/${APPNAME}_XXXXXXXXXX")
 
 # Better for handling spaces in filenames.
 export IFS=$'\n'
-
-# -----------------------------------------------------------------------------
-# Check that the destination directory is a backup location
-# -----------------------------------------------------------------------------
-
-fn_check_backup_marker
 
 # -----------------------------------------------------------------------------
 # Check for previous backup operations
