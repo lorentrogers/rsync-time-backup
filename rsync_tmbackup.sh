@@ -206,7 +206,7 @@ fn_expire_backups() {
 
 fn_delete_backups() {
 	fn_check_backup_marker
-	fn_log_info "Deleting expired backups..."
+	fn_log_info "deleting expired backups..."
 	rm -rf -- "$EXPIRED_DIR"
 }
 
@@ -290,6 +290,8 @@ fi
 readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
 # this function sets variable $UTC dependent on backup marker content
 fn_check_backup_marker
+fn_log_info "backup location: $DEST_FOLDER"
+fn_log_info "backup source path: $SRC_FOLDER"
 
 # -----------------------------------------------------------------------------
 # BACKUP: basic variables
@@ -297,8 +299,10 @@ fn_check_backup_marker
 
 if [ "$UTC" == "true" ]; then
 	readonly NOW=$(date -u +"%Y-%m-%d-%H%M%S")
+	fn_log_info "backup time base: UTC"
 else
 	readonly NOW=$(date +"%Y-%m-%d-%H%M%S")
+	fn_log_info "backup time base: local time"
 fi
 
 readonly DEST="$DEST_FOLDER/$NOW"
@@ -355,9 +359,7 @@ while : ; do
 	# Start backup
 	# -----------------------------------------------------------------------------
 
-	fn_log_info "Starting backup..."
-	fn_log_info "From: $SRC_FOLDER"
-	fn_log_info "To:   $DEST"
+	fn_log_info "starting backup $(basename $DEST)"
 
 	CMD="rsync"
 	CMD="$CMD --compress"
@@ -380,13 +382,13 @@ while : ; do
 		# If the path is relative, it needs to be relative to the destination. To keep
 		# it simple, just use an absolute path. See http://serverfault.com/a/210058/118679
 		PREVIOUS_DEST="$(cd "$PREVIOUS_DEST"; pwd)"
-		fn_log_info "doing incremental backup from previous backup $PREVIOUS_DEST"
+		fn_log_info "doing incremental backup from $(basename $PREVIOUS_DEST)"
 		CMD="$CMD --link-dest='$PREVIOUS_DEST'"
 	fi
 	CMD="$CMD -- '$SRC_FOLDER/' '$DEST/'"
 	CMD="$CMD | grep -E '^deleting|[^/]$'"
 
-	fn_log_info "$CMD"
+	[ "$OPT_VERBOSE" == "true" ] && fn_log_info "$CMD"
 
 	eval $CMD
 
@@ -449,5 +451,5 @@ fn_delete_backups
 
 rm -f -- "$INPROGRESS_FILE"
 
-fn_log_info "Backup completed without errors."
+fn_log_info "backup $(basename $DEST) completed without errors."
 exit 0
