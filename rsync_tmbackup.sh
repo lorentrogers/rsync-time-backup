@@ -46,9 +46,10 @@ fn_usage() {
 	echo
 	echo "Commands:"
 	echo
-	echo "  init <backup_location> [--utc]"
+	echo "  init <backup_location> [--local-time]"
 	echo "      initialize <backup_location> by creating a backup marker file."
-	echo "      if --utc is added all future backups will be created with UTC time."
+	echo "      If '--local-time' is used all future backups will be created"
+	echo "      with local time zone, otherwise backup times will be in UTC."
 	echo
 	echo "  backup <src_location> <backup_location> [<exclude_file>]"
 	echo "      create a Time Machine like backup from <src_location> at <backup_location>."
@@ -238,10 +239,10 @@ while [ "$#" -gt 0 ]; do
 			       exit 1
 			fi
 			readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
-			if [ "$3" == "--utc" ]; then
-				fn_set_backup_marker "UTC"
-			else
+			if [ "$3" == "--local-time" ]; then
 				fn_set_backup_marker
+			else
+				fn_set_backup_marker "UTC"
 			fi
 			exit 0
 		;;
