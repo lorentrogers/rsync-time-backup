@@ -48,8 +48,10 @@ fn_usage() {
 	echo
 	echo "  init <backup_location> [--local-time]"
 	echo "      initialize <backup_location> by creating a backup marker file."
-	echo "      If '--local-time' is used all future backups will be created"
-	echo "      with local time zone, otherwise backup times will be in UTC."
+	echo
+	echo "         --local-time"
+	echo "             name all backups using local time, per default backups"
+	echo "             are named using UTC."
 	echo
 	echo "  backup <src_location> <backup_location> [<exclude_file>]"
 	echo "      create a Time Machine like backup from <src_location> at <backup_location>."
@@ -87,7 +89,9 @@ fn_mkdir() {
 
 fn_find_backups() {
 	if [ "$1" == "expired" ]; then
-		find "$EXPIRED_DIR" -type d -name "????-??-??-??????" -prune | sort -r
+		if [ -d "$EXPIRED_DIR" ]; then
+			find "$EXPIRED_DIR" -type d -name "????-??-??-??????" -prune | sort -r
+		fi
 	else
 		find "$DEST_FOLDER" -type d -name "????-??-??-??????" -prune | sort -r
 	fi
@@ -131,11 +135,14 @@ fn_mark_expired() {
 fn_expire_backups() {
 	local NOW_TS=$(fn_parse_date "$1")
 
+	#
+	# backup retention windows and times
+	#
 	local KEEP_ALL_TS=$((NOW_TS - 4 * 3600))	# all backups, for 4 hrs
-	local KEEP_1HR_TS=$((NOW_TS - 1 * 24 * 3600))	# max 24 per day, for 24 hrs
-	local KEEP_4HR_TS=$((NOW_TS - 3 * 24 * 3600))	# max  6 per day, for 3 days
-	local KEEP_8HR_TS=$((NOW_TS - 14 * 24 * 3600))	# max  3 per day, for 2 weeks
-	local KEEP_24HR_TS=$((NOW_TS - 28 * 24 * 3600))	# max  1 per day, for 4 weeks
+	local KEEP_1HR_TS=$((NOW_TS - 1 * 24 * 3600))	# max 1 in a  1 hour window, max 24 per day, for 24 hrs
+	local KEEP_4HR_TS=$((NOW_TS - 3 * 24 * 3600))	# max 1 in a  4 hour window, max  6 per day, for 3 days
+	local KEEP_8HR_TS=$((NOW_TS - 14 * 24 * 3600))	# max 1 in a  8 hour window, max  3 per day, for 2 weeks
+	local KEEP_24HR_TS=$((NOW_TS - 28 * 24 * 3600))	# max 1 in a 24 hour window, max  1 per day, for 4 weeks
 
 	# Default value for $PREV_DATE ensures that the most recent backup is never deleted.
 	local PREV_DATE="0000-00-00-000000"
@@ -162,6 +169,7 @@ fn_expire_backups() {
 		fi
 		if   [ $BACKUP_TS -ge $KEEP_ALL_TS ]; then
 			true
+			[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE  ALL retained"
 		elif   [ $BACKUP_TS -ge $KEEP_1HR_TS ]; then
 			if [ "$BACKUP_DAY" == "$PREV_DAY" ] && \
 			   [ "$((BACKUP_HOUR / 1))" -eq "$((PREV_HOUR / 1))" ]; then
@@ -198,7 +206,7 @@ fn_expire_backups() {
 				fn_mark_expired "$BACKUP"
 				fn_log_info "backup $BACKUP_DATE  ALL expired"
 			else
-				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE  ALL retained"
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 1MON retained"
 			fi
 		fi
 		PREV_DATE=$BACKUP_DATE
@@ -340,8 +348,6 @@ if [ -f "$INPROGRESS_FILE" ]; then
 	fi
 else
 	echo "$$" > "$INPROGRESS_FILE"
-	# for a fresh backup a new backup directory is needed
-	fn_mkdir "$DEST"
 fi
 
 # -----------------------------------------------------------------------------
@@ -350,6 +356,23 @@ fi
 
 fn_log_info "expiring backups..."
 fn_expire_backups "$NOW"
+
+# -----------------------------------------------------------------------------
+# create backup directory
+# -----------------------------------------------------------------------------
+
+LAST_EXPIRED="$(fn_find_backups expired | head -n 1)"
+
+if [ -n "$LAST_EXPIRED" ]; then
+	# reuse the newest expired backup as the basis for the next rsync
+	# operation. this significantly speeds up backup times!
+	# to work rsync needs the following options: --delete --delete-excluded
+	fn_log_info "reusing expired backup $(basename $LAST_EXPIRED)"
+	mv "$LAST_EXPIRED" "$DEST"
+else
+	# a new backup directory is needed
+	fn_mkdir "$DEST"
+fi
 
 # -----------------------------------------------------------------------------
 # Run in a loop to handle the "No space left on device" logic.
