@@ -123,6 +123,7 @@ fn_set_backup_marker() {
 	else
 		touch "$BACKUP_MARKER_FILE"
 	fi
+	chmod 600 $BACKUP_MARKER_FILE
 	fn_log_info "Backup marker $BACKUP_MARKER_FILE created."
 }
 
