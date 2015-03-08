@@ -6,9 +6,26 @@ readonly APPNAME=$(basename ${0%.sh})
 # Log functions
 # -----------------------------------------------------------------------------
 
-fn_log_info()  { echo "$APPNAME: $1"; }
-fn_log_warn()  { echo "$APPNAME: [WARNING] $1" 1>&2; }
-fn_log_error() { echo "$APPNAME: [ERROR] $1" 1>&2; }
+fn_log_info() {
+	if [ "$OPT_SYSLOG" == "true" ]; then
+		echo "$1" >&40
+	fi
+	echo "$1"
+}
+
+fn_log_warn() {
+	if [ "$OPT_SYSLOG" == "true" ]; then
+		echo "[WARNING] $1" >&40
+	fi
+	echo "[WARNING] $1" 1>&2
+}
+
+fn_log_error() {
+	if [ "$OPT_SYSLOG" == "true" ]; then
+		echo "[ERROR] $1" >&40
+	fi
+	echo "[ERROR] $1" 1>&2
+}
 
 # -----------------------------------------------------------------------------
 # traps
@@ -33,6 +50,10 @@ fn_cleanup() {
 	if [ -n "$TMP_RSYNC_LOG" ]; then
 		rm -f -- $TMP_RSYNC_LOG
 	fi
+	## close redirection to logger
+	if [ "$OPT_SYSLOG" == "true" ]; then
+		exec 40>&-
+	fi
 }
 
 trap fn_cleanup EXIT
@@ -42,29 +63,32 @@ trap fn_cleanup EXIT
 # -----------------------------------------------------------------------------
 
 fn_usage() {
-	echo "Usage: $APPNAME [OPTIONS] command [ARGS]"
-	echo
-	echo "Commands:"
-	echo
-	echo "  init <backup_location> [--local-time]"
-	echo "      initialize <backup_location> by creating a backup marker file."
-	echo
-	echo "         --local-time"
-	echo "             name all backups using local time, per default backups"
-	echo "             are named using UTC."
-	echo
-	echo "  backup <src_location> <backup_location> [<exclude_file>]"
-	echo "      create a Time Machine like backup from <src_location> at <backup_location>."
-	echo "      optional: exclude files in <exclude_file> from backup"
-	echo
-	echo "General options:"
-	echo
-	echo "  -v, --verbose"
-	echo "      increase verbosity"
-	echo
-	echo "  -h, --help"
-	echo "      this help text"
-	echo
+	fn_log_info "Usage: $APPNAME [OPTIONS] command [ARGS]"
+	fn_log_info
+	fn_log_info "Commands:"
+	fn_log_info
+	fn_log_info "  init <backup_location> [--local-time]"
+	fn_log_info "      initialize <backup_location> by creating a backup marker file."
+	fn_log_info
+	fn_log_info "         --local-time"
+	fn_log_info "             name all backups using local time, per default backups"
+	fn_log_info "             are named using UTC."
+	fn_log_info
+	fn_log_info "  backup <src_location> <backup_location> [<exclude_file>]"
+	fn_log_info "      create a Time Machine like backup from <src_location> at <backup_location>."
+	fn_log_info "      optional: exclude files in <exclude_file> from backup"
+	fn_log_info
+	fn_log_info "General options:"
+	fn_log_info
+	fn_log_info "  -s, --syslog"
+	fn_log_info "      log output to syslogd"
+	fn_log_info
+	fn_log_info "  -v, --verbose"
+	fn_log_info "      increase verbosity"
+	fn_log_info
+	fn_log_info "  -h, --help"
+	fn_log_info "      this help text"
+	fn_log_info
 }
 
 fn_parse_date() {
@@ -246,6 +270,7 @@ fn_delete_backups() {
 
 # set defaults
 OPT_VERBOSE="false"
+OPT_SYSLOG="false"
 
 # parse arguments
 while [ "$#" -gt 0 ]; do
@@ -257,9 +282,13 @@ while [ "$#" -gt 0 ]; do
 		-v|--verbose)
 			OPT_VERBOSE="true"
 		;;
+		-s|--syslog)
+			OPT_SYSLOG="true"
+			exec 40> >(exec logger -t $APPNAME)
+		;;
 		init)
 			if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
-				echo "Wrong number of arguments for command '$1'." 1>&2
+				fn_log_error "Wrong number of arguments for command '$1'."
 				exit 1
 			fi
 			readonly DEST_FOLDER="${2%/}"
@@ -277,7 +306,7 @@ while [ "$#" -gt 0 ]; do
 		;;
 		backup)
 			if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
-				echo "Wrong number of arguments for command '$1'." 1>&2
+				fn_log_error "Wrong number of arguments for command '$1'."
 				exit 1
 			fi
 			readonly SRC_FOLDER="${2%/}"
@@ -300,7 +329,7 @@ while [ "$#" -gt 0 ]; do
 			break
 		;;
 		*)
-			echo "Invalid argument '$1'. Use --help for more information." 1>&2
+			fn_log_error "Invalid argument '$1'. Use --help for more information."
 			exit 1
 		;;
 	esac
@@ -308,8 +337,8 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$#" -eq 0 ]; then
-        echo "Usage: $APPNAME [OPTIONS] command [ARGS]"
-        echo "Try '$APPNAME --help' for more information."
+        fn_log_info "Usage: $APPNAME [OPTIONS] command [ARGS]"
+        fn_log_info "Try '$APPNAME --help' for more information."
         exit 0
 fi
 
@@ -404,8 +433,6 @@ while : ; do
 	# Start backup
 	# -----------------------------------------------------------------------------
 
-	fn_log_info "starting backup $(basename $DEST)"
-
 	CMD="rsync"
 	CMD="$CMD --compress"
 	CMD="$CMD --numeric-ids"
@@ -433,9 +460,18 @@ while : ; do
 	CMD="$CMD -- '$SRC_FOLDER/' '$DEST/'"
 	CMD="$CMD | grep -E '^deleting|[^/]$'"
 
+	fn_log_info "starting backup backup $(basename $DEST)"
+	fn_log_info "--start--rsync--"
+
 	[ "$OPT_VERBOSE" == "true" ] && fn_log_info "$CMD"
 
-	eval $CMD
+	if [ "$OPT_SYSLOG" == "true" ]; then
+		eval $CMD | tee /dev/stderr 2>&40
+	else
+		eval $CMD
+	fi
+
+	fn_log_info "--end--rsync--"
 
 	# -----------------------------------------------------------------------------
 	# Check if we ran out of space
@@ -496,5 +532,5 @@ fn_delete_backups
 
 rm -f -- "$INPROGRESS_FILE"
 
-fn_log_info "backup $(basename $DEST) completed without errors."
+fn_log_info "backup $(basename $DEST) completed successfully."
 exit 0
