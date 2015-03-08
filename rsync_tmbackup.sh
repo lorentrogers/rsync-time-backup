@@ -97,6 +97,26 @@ fn_find_backups() {
 	fi
 }
 
+fn_set_backup_marker() {
+	fn_mkdir "$DEST_FOLDER"
+	if [ "$1" == "UTC" ]; then
+		echo "UTC=true" > "$BACKUP_MARKER_FILE"
+	else
+		echo "UTC=false" > "$BACKUP_MARKER_FILE"
+	fi
+( cat <<"__EOF__"
+RETENTION_WIN_ALL="$((4 * 3600))"        # 4 hrs
+RETENTION_WIN_01H="$((1 * 24 * 3600))"   # 24 hrs
+RETENTION_WIN_04H="$((3 * 24 * 3600))"   # 3 days
+RETENTION_WIN_08H="$((14 * 24 * 3600))"  # 2 weeks
+RETENTION_WIN_24H="$((28 * 24 * 3600))"  # 4 weeks
+__EOF__
+) >> "$BACKUP_MARKER_FILE"
+	# since we excute this file, access should be limited
+	chmod 600 $BACKUP_MARKER_FILE
+	fn_log_info "Backup marker $BACKUP_MARKER_FILE created."
+}
+
 fn_check_backup_marker() {
 	#
 	# TODO: check that the destination supports hard links
@@ -109,22 +129,23 @@ fn_check_backup_marker() {
 		fn_log_error "no write permission for this backup location - aborting."
 		exit 1
 	fi
-	if [ "$(cat "$BACKUP_MARKER_FILE")" == "UTC" ]; then
-		UTC="true"
-	else
-		UTC="false"
+	if [ -z "$CONFIG_IMPORTED" ]; then
+		CONFIG_IMPORTED=true
+		if [ -n "$(cat "$BACKUP_MARKER_FILE")" ]; then
+			# read backup configuration from backup marker
+			source "$BACKUP_MARKER_FILE"
+			fn_log_info "configuration imported from backup.marker"
+		else
+			fn_log_info "no configuration imported from backup marker - using defaults"
+		fi
+		# set defaults if missing - compatibility with old backups
+		[ -z "$UTC" ] && UTC="false"
+		[ -z "$RETENTION_WIN_ALL" ] && RETENTION_WIN_ALL="$((4 * 3600))"
+		[ -z "$RETENTION_WIN_01H" ] && RETENTION_WIN_01H="$((1 * 24 * 3600))"
+		[ -z "$RETENTION_WIN_04H" ] && RETENTION_WIN_04H="$((3 * 24 * 3600))"
+		[ -z "$RETENTION_WIN_08H" ] && RETENTION_WIN_08H="$((14 * 24 * 3600))"
+		[ -z "$RETENTION_WIN_24H" ] && RETENTION_WIN_24H="$((28 * 24 * 3600))"
 	fi
-}
-
-fn_set_backup_marker() {
-	fn_mkdir "$DEST_FOLDER"
-	if [ "$1" == "UTC" ]; then
-		echo "UTC" >> "$BACKUP_MARKER_FILE"
-	else
-		touch "$BACKUP_MARKER_FILE"
-	fi
-	chmod 600 $BACKUP_MARKER_FILE
-	fn_log_info "Backup marker $BACKUP_MARKER_FILE created."
 }
 
 fn_mark_expired() {
@@ -137,16 +158,16 @@ fn_expire_backups() {
 	local NOW_TS=$(fn_parse_date "$1")
 
 	#
-	# backup retention windows and times
+	# backup aggregation windows and retention times
 	#
-	local KEEP_ALL_TS=$((NOW_TS - 4 * 3600))	# all backups, for 4 hrs
-	local KEEP_1HR_TS=$((NOW_TS - 1 * 24 * 3600))	# max 1 in a  1 hour window, max 24 per day, for 24 hrs
-	local KEEP_4HR_TS=$((NOW_TS - 3 * 24 * 3600))	# max 1 in a  4 hour window, max  6 per day, for 3 days
-	local KEEP_8HR_TS=$((NOW_TS - 14 * 24 * 3600))	# max 1 in a  8 hour window, max  3 per day, for 2 weeks
-	local KEEP_24HR_TS=$((NOW_TS - 28 * 24 * 3600))	# max 1 in a 24 hour window, max  1 per day, for 4 weeks
+	local LIMIT_ALL_TS=$((NOW_TS - RETENTION_WIN_ALL))	# until this point in time all backups are retained
+	local LIMIT_1H_TS=$((NOW_TS  - RETENTION_WIN_01H))	# max 1 backup per hour
+	local LIMIT_4H_TS=$((NOW_TS  - RETENTION_WIN_04H))	# max 1 backup per 4 hours
+	local LIMIT_8H_TS=$((NOW_TS  - RETENTION_WIN_08H))	# max 1 backup per 8 hours
+	local LIMIT_24H_TS=$((NOW_TS - RETENTION_WIN_24H))	# max 1 backup per day 
 
-	# Default value for $PREV_DATE ensures that the most recent backup is never deleted.
-	local PREV_DATE="0000-00-00-000000"
+	# Default value for $PREV_BACKUP_DATE ensures that the most recent backup is never deleted.
+	local PREV_BACKUP_DATE="0000-00-00-000000"
 	local BACKUP
 	for BACKUP in $(fn_find_backups | sort -r); do
 
@@ -158,59 +179,59 @@ fn_expire_backups() {
 		local BACKUP_DAY=${BACKUP_DATE:0:10}
 		local BACKUP_HOUR=${BACKUP_DATE:11:2}
 		local BACKUP_HOUR=${BACKUP_HOUR#0}	# work around bash octal numbers
-		local PREV_MONTH=${PREV_DATE:0:7}
-		local PREV_DAY=${PREV_DATE:0:10}
-		local PREV_HOUR=${PREV_DATE:11:2}
-		local PREV_HOUR=${PREV_HOUR#0}		# work around bash octal numbers
+		local PREV_BACKUP_MONTH=${PREV_BACKUP_DATE:0:7}
+		local PREV_BACKUP_DAY=${PREV_BACKUP_DATE:0:10}
+		local PREV_BACKUP_HOUR=${PREV_BACKUP_DATE:11:2}
+		local PREV_BACKUP_HOUR=${PREV_BACKUP_HOUR#0}	# work around bash octal numbers
 
 		# Skip if failed to parse date...
 		if [ -z "$BACKUP_TS" ]; then
 			fn_log_warn "Could not parse date: $BACKUP"
 			continue
 		fi
-		if   [ $BACKUP_TS -ge $KEEP_ALL_TS ]; then
+		if   [ $BACKUP_TS -ge $LIMIT_ALL_TS ]; then
 			true
-			[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE  ALL retained"
-		elif   [ $BACKUP_TS -ge $KEEP_1HR_TS ]; then
-			if [ "$BACKUP_DAY" == "$PREV_DAY" ] && \
-			   [ "$((BACKUP_HOUR / 1))" -eq "$((PREV_HOUR / 1))" ]; then
+			[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE ALL retained"
+		elif   [ $BACKUP_TS -ge $LIMIT_1H_TS ]; then
+			if [ "$BACKUP_DAY" == "$PREV_BACKUP_DAY" ] && \
+			   [ "$((BACKUP_HOUR / 1))" -eq "$((PREV_BACKUP_HOUR / 1))" ]; then
 				fn_mark_expired "$BACKUP"
-				fn_log_info "backup $BACKUP_DATE 01HR expired"
+				fn_log_info "backup $BACKUP_DATE 01H expired"
 			else
-				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 01HR retained"
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 01H retained"
 			fi
-		elif [ $BACKUP_TS -ge $KEEP_4HR_TS ]; then
-			if [ "$BACKUP_DAY" == "$PREV_DAY" ] && \
-			   [ "$((BACKUP_HOUR / 4))" -eq "$((PREV_HOUR / 4))" ]; then
+		elif [ $BACKUP_TS -ge $LIMIT_4H_TS ]; then
+			if [ "$BACKUP_DAY" == "$PREV_BACKUP_DAY" ] && \
+			   [ "$((BACKUP_HOUR / 4))" -eq "$((PREV_BACKUP_HOUR / 4))" ]; then
 				fn_mark_expired "$BACKUP"
-				fn_log_info "backup $BACKUP_DATE 04HR expired"
+				fn_log_info "backup $BACKUP_DATE 04H expired"
 			else
-				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 04HR retained"
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 04H retained"
 			fi
-		elif [ $BACKUP_TS -ge $KEEP_8HR_TS ]; then
-			if [ "$BACKUP_DAY" == "$PREV_DAY" ] && \
-			   [ "$((BACKUP_HOUR / 8))" -eq "$((PREV_HOUR / 8))" ]; then
+		elif [ $BACKUP_TS -ge $LIMIT_8H_TS ]; then
+			if [ "$BACKUP_DAY" == "$PREV_BACKUP_DAY" ] && \
+			   [ "$((BACKUP_HOUR / 8))" -eq "$((PREV_BACKUP_HOUR / 8))" ]; then
 				fn_mark_expired "$BACKUP"
-				fn_log_info "backup $BACKUP_DATE 08HR expired"
+				fn_log_info "backup $BACKUP_DATE 08H expired"
 			else
-				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 08HR retained"
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 08H retained"
 			fi
-		elif [ $BACKUP_TS -ge $KEEP_24HR_TS ]; then
-			if [ "$BACKUP_DAY" == "$PREV_DAY" ]; then
+		elif [ $BACKUP_TS -ge $LIMIT_24H_TS ]; then
+			if [ "$BACKUP_DAY" == "$PREV_BACKUP_DAY" ]; then
 				fn_mark_expired "$BACKUP"
-				fn_log_info "backup $BACKUP_DATE 24HR expired"
+				fn_log_info "backup $BACKUP_DATE 24H expired"
 			else
-				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 24HR retained"
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 24H retained"
 			fi
 		else
-			if [ "$BACKUP_MONTH" == "$PREV_MONTH" ]; then
+			if [ "$BACKUP_MONTH" == "$PREV_BACKUP_MONTH" ]; then
 				fn_mark_expired "$BACKUP"
-				fn_log_info "backup $BACKUP_DATE  ALL expired"
+				fn_log_info "backup $BACKUP_DATE 01M expired"
 			else
-				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 1MON retained"
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 01M retained"
 			fi
 		fi
-		PREV_DATE=$BACKUP_DATE
+		PREV_BACKUP_DATE=$BACKUP_DATE
 	done
 }
 
@@ -304,7 +325,7 @@ fn_log_info "backup location: $DEST_FOLDER"
 fn_log_info "backup source path: $SRC_FOLDER"
 
 # -----------------------------------------------------------------------------
-# BACKUP: basic variables
+# Basic variables
 # -----------------------------------------------------------------------------
 
 if [ "$UTC" == "true" ]; then
@@ -352,7 +373,7 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# expire backups
+# expire existing backups
 # -----------------------------------------------------------------------------
 
 fn_log_info "expiring backups..."
