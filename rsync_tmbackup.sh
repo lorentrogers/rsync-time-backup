@@ -98,7 +98,6 @@ fn_find_backups() {
 }
 
 fn_set_backup_marker() {
-	fn_mkdir "$DEST_FOLDER"
 	if [ "$1" == "UTC" ]; then
 		echo "UTC=true" > "$BACKUP_MARKER_FILE"
 	else
