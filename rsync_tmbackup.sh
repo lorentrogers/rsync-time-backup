@@ -214,44 +214,44 @@ fn_expire_backups() {
 		fi
 		if   [ $BACKUP_TS -ge $LIMIT_ALL_TS ]; then
 			true
-			[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE ALL retained"
+			[ "$OPT_VERBOSE" == "true" ] && fn_log_info "  $BACKUP_DATE ALL retained"
 		elif   [ $BACKUP_TS -ge $LIMIT_1H_TS ]; then
 			if [ "$BACKUP_DAY" == "$PREV_BACKUP_DAY" ] && \
 			   [ "$((BACKUP_HOUR / 1))" -eq "$((PREV_BACKUP_HOUR / 1))" ]; then
 				fn_mark_expired "$BACKUP"
-				fn_log_info "backup $BACKUP_DATE 01H expired"
+				fn_log_info "  $BACKUP_DATE 01H expired"
 			else
-				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 01H retained"
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "  $BACKUP_DATE 01H retained"
 			fi
 		elif [ $BACKUP_TS -ge $LIMIT_4H_TS ]; then
 			if [ "$BACKUP_DAY" == "$PREV_BACKUP_DAY" ] && \
 			   [ "$((BACKUP_HOUR / 4))" -eq "$((PREV_BACKUP_HOUR / 4))" ]; then
 				fn_mark_expired "$BACKUP"
-				fn_log_info "backup $BACKUP_DATE 04H expired"
+				fn_log_info "  $BACKUP_DATE 04H expired"
 			else
-				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 04H retained"
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "  $BACKUP_DATE 04H retained"
 			fi
 		elif [ $BACKUP_TS -ge $LIMIT_8H_TS ]; then
 			if [ "$BACKUP_DAY" == "$PREV_BACKUP_DAY" ] && \
 			   [ "$((BACKUP_HOUR / 8))" -eq "$((PREV_BACKUP_HOUR / 8))" ]; then
 				fn_mark_expired "$BACKUP"
-				fn_log_info "backup $BACKUP_DATE 08H expired"
+				fn_log_info "  $BACKUP_DATE 08H expired"
 			else
-				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 08H retained"
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "  $BACKUP_DATE 08H retained"
 			fi
 		elif [ $BACKUP_TS -ge $LIMIT_24H_TS ]; then
 			if [ "$BACKUP_DAY" == "$PREV_BACKUP_DAY" ]; then
 				fn_mark_expired "$BACKUP"
-				fn_log_info "backup $BACKUP_DATE 24H expired"
+				fn_log_info "  $BACKUP_DATE 24H expired"
 			else
-				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 24H retained"
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "  $BACKUP_DATE 24H retained"
 			fi
 		else
 			if [ "$BACKUP_MONTH" == "$PREV_BACKUP_MONTH" ]; then
 				fn_mark_expired "$BACKUP"
-				fn_log_info "backup $BACKUP_DATE 01M expired"
+				fn_log_info "  $BACKUP_DATE 01M expired"
 			else
-				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "backup $BACKUP_DATE 01M retained"
+				[ "$OPT_VERBOSE" == "true" ] && fn_log_info "  $BACKUP_DATE 01M retained"
 			fi
 		fi
 		PREV_BACKUP_DATE=$BACKUP_DATE
@@ -346,11 +346,11 @@ fi
 # Check that the destination directory is a backup location
 # -----------------------------------------------------------------------------
 
+fn_log_info "backup location: $DEST_FOLDER"
+fn_log_info "backup source path: $SRC_FOLDER"
 readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
 # this function sets variable $UTC dependent on backup marker content
 fn_check_backup_marker
-fn_log_info "backup location: $DEST_FOLDER"
-fn_log_info "backup source path: $SRC_FOLDER"
 
 # -----------------------------------------------------------------------------
 # Basic variables
@@ -385,7 +385,7 @@ if [ -f "$INPROGRESS_FILE" ]; then
 	fi
 	echo "$$" > "$INPROGRESS_FILE"
 	if [ -d "$PREVIOUS_DEST" ]; then
-		fn_log_info "previous backup $PREVIOUS_DEST failed or was interrupted - resuming from there."
+		fn_log_info "previous backup $PREVIOUS_DEST was interrupted - resuming from there."
 
 		# - Last backup is moved to current backup folder so that it can be resumed.
 		# - 2nd to last backup becomes last backup.
@@ -460,8 +460,8 @@ while : ; do
 	CMD="$CMD -- '$SRC_FOLDER/' '$DEST/'"
 	CMD="$CMD | grep -E '^deleting|[^/]$'"
 
-	fn_log_info "starting backup backup $(basename $DEST)"
-	fn_log_info "--start--rsync--"
+	fn_log_info "backup name $(basename $DEST)"
+	fn_log_info "rsync start"
 
 	[ "$OPT_VERBOSE" == "true" ] && fn_log_info "$CMD"
 
@@ -471,7 +471,7 @@ while : ; do
 		eval $CMD
 	fi
 
-	fn_log_info "--end--rsync--"
+	fn_log_info "rsync end"
 
 	# -----------------------------------------------------------------------------
 	# Check if we ran out of space
@@ -532,5 +532,5 @@ fn_delete_backups
 
 rm -f -- "$INPROGRESS_FILE"
 
-fn_log_info "backup $(basename $DEST) completed successfully."
+fn_log_info "backup $DEST completed successfully."
 exit 0
