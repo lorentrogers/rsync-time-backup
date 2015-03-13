@@ -458,18 +458,20 @@ while : ; do
 		CMD="$CMD --link-dest='$PREVIOUS_DEST'"
 	fi
 	CMD="$CMD -- '$SRC_FOLDER/' '$DEST/'"
-	CMD="$CMD | grep -E '^deleting|[^/]$'"
 
 	fn_log_info "backup name $(basename $DEST)"
 	fn_log_info "rsync start"
 
-	[ "$OPT_VERBOSE" == "true" ] && fn_log_info "$CMD"
-
-	if [ "$OPT_SYSLOG" == "true" ]; then
-		eval $CMD | tee /dev/stderr 2>&40
+	if [ "$OPT_VERBOSE" == "true" ]; then
+		CMD="$CMD | grep -v -E '^$'"
+		fn_log_info "$CMD"
 	else
-		eval $CMD
+		CMD="$CMD | grep -v -E '^[*]?deleting|^$'"
 	fi
+	if [ "$OPT_SYSLOG" == "true" ]; then
+		CMD="$CMD | tee /dev/stderr 2>&40"
+	fi
+	eval "$CMD"
 
 	fn_log_info "rsync end"
 
