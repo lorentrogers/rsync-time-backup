@@ -312,11 +312,11 @@ while [ "$#" -gt 0 ]; do
 			readonly SRC_FOLDER="${2%/}"
 			readonly DEST_FOLDER="${3%/}"
 			readonly EXCLUSION_FILE="$4"
-			if [ ! -d "$SRC_FOLDER" ]; then
+			if [ ! -d "$SRC_FOLDER/" ]; then
 			       fn_log_error "source location $SRC_FOLDER does not exist."
 			       exit 1
 			fi
-			if [ ! -d "$DEST_FOLDER" ]; then
+			if [ ! -d "$DEST_FOLDER/" ]; then
 			       fn_log_error "backup location $DEST_FOLDER does not exist."
 			       exit 1
 			fi
@@ -346,8 +346,8 @@ fi
 # Check that the destination directory is a backup location
 # -----------------------------------------------------------------------------
 
-fn_log_info "backup location: $DEST_FOLDER"
-fn_log_info "backup source path: $SRC_FOLDER"
+fn_log_info "backup location: $DEST_FOLDER/"
+fn_log_info "backup source path: $SRC_FOLDER/"
 readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
 # this function sets variable $UTC dependent on backup marker content
 fn_check_backup_marker
