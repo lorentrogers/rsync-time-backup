@@ -507,10 +507,10 @@ done
 # Check whether rsync reported any errors
 # -----------------------------------------------------------------------------
 
-if [ -n "$(grep "rsync:" "$TMP_RSYNC_LOG")" ]; then
+if [ -n "$(grep "^rsync:" "$TMP_RSYNC_LOG")" ]; then
 	fn_log_warn "Rsync reported a warning, please check '$TMP_RSYNC_LOG' for more details."
 fi
-if [ -n "$(grep "rsync error:" "$TMP_RSYNC_LOG")" ]; then
+if [ -n "$(grep "^rsync error:" "$TMP_RSYNC_LOG")" ]; then
 	fn_log_error "Rsync reported an error, please check '$TMP_RSYNC_LOG' for more details."
 	exit 1
 fi
