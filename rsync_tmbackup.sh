@@ -284,7 +284,7 @@ while [ "$#" -gt 0 ]; do
 		;;
 		-s|--syslog)
 			OPT_SYSLOG="true"
-			exec 40> >(exec logger -t $APPNAME)
+			exec 40> >(exec logger -t "$APPNAME[$$]")
 		;;
 		init)
 			if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
