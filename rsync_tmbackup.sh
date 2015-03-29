@@ -260,7 +260,11 @@ fn_expire_backups() {
 
 fn_delete_backups() {
 	fn_check_backup_marker
-	fn_log_info "deleting expired backups..."
+	local BACKUP
+	for BACKUP in $EXPIRED_DIR/* ; do
+		# work-around: in case of no match, bash returns "*"
+		[ "$BACKUP" != '*' ] && [ -e "$BACKUP" ] && fn_log_info "deleting expired backup $(basename $BACKUP)"
+	done
 	rm -rf -- "$EXPIRED_DIR"
 }
 
@@ -462,11 +466,9 @@ while : ; do
 	fn_log_info "backup name $(basename $DEST)"
 	fn_log_info "rsync start"
 
+	CMD="$CMD | grep -v -E '^[*]?deleting|^$|^.[Ld]\.\.t\.\.\.\.\.\.'"
 	if [ "$OPT_VERBOSE" == "true" ]; then
-		CMD="$CMD | grep -v -E '^$'"
 		fn_log_info "$CMD"
-	else
-		CMD="$CMD | grep -v -E '^[*]?deleting|^$'"
 	fi
 	if [ "$OPT_SYSLOG" == "true" ]; then
 		CMD="$CMD | tee /dev/stderr 2>&40"
@@ -508,10 +510,10 @@ done
 # -----------------------------------------------------------------------------
 
 if [ -n "$(grep "^rsync:" "$TMP_RSYNC_LOG")" ]; then
-	fn_log_warn "Rsync reported a warning, please check '$TMP_RSYNC_LOG' for more details."
+	fn_log_warn "Rsync reported a warning."
 fi
 if [ -n "$(grep "^rsync error:" "$TMP_RSYNC_LOG")" ]; then
-	fn_log_error "Rsync reported an error, please check '$TMP_RSYNC_LOG' for more details."
+	fn_log_error "Rsync reported an error - exiting."
 	exit 1
 fi
 
