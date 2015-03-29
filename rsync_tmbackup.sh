@@ -50,7 +50,7 @@ fn_cleanup() {
 	if [ -n "$TMP_RSYNC_LOG" ]; then
 		rm -f -- $TMP_RSYNC_LOG
 	fi
-	## close redirection to logger
+	# close redirection to logger
 	if [ "$OPT_SYSLOG" == "true" ]; then
 		exec 40>&-
 	fi
@@ -77,6 +77,9 @@ fn_usage() {
 	fn_log_info "  backup <src_location> <backup_location> [<exclude_file>]"
 	fn_log_info "      create a Time Machine like backup from <src_location> at <backup_location>."
 	fn_log_info "      optional: exclude files in <exclude_file> from backup"
+	fn_log_info
+	fn_log_info "  diff <backup_location1> <backup_location2>"
+	fn_log_info "      show differences between two backups."
 	fn_log_info
 	fn_log_info "General options:"
 	fn_log_info
@@ -307,6 +310,17 @@ while [ "$#" -gt 0 ]; do
 				fn_set_backup_marker "UTC"
 			fi
 			exit 0
+		;;
+		diff)
+			if [ "$#" -ne 3 ]; then
+				fn_log_error "Wrong number of arguments for command '$1'."
+				exit 1
+			fi
+			LOC1="${2%/}"	
+			LOC2="${3%/}"	
+			rsync --dry-run -auvi "$LOC1/" "$LOC2/" | grep -E -v '^sending|^$|^sent.*sec$|^total.*RUN\)'
+			exit 0
+
 		;;
 		backup)
 			if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
