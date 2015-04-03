@@ -266,9 +266,12 @@ fn_delete_backups() {
 	local BACKUP
 	for BACKUP in $EXPIRED_DIR/* ; do
 		# work-around: in case of no match, bash returns "*"
-		[ "$BACKUP" != '*' ] && [ -e "$BACKUP" ] && fn_log_info "deleting expired backup $(basename $BACKUP)"
+		if [ "$BACKUP" != '*' ] && [ -e "$BACKUP" ]; then
+			fn_log_info "deleting expired backup $(basename $BACKUP)"
+			rm -rf -- "$BACKUP"
+		fi
 	done
-	rm -rf -- "$EXPIRED_DIR"
+	rmdir -- "$EXPIRED_DIR"
 }
 
 # -----------------------------------------------------------------------------
