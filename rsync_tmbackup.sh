@@ -400,7 +400,7 @@ export IFS=$'\n'
 PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
 
 if [ -f "$INPROGRESS_FILE" ]; then
-	if pgrep -F "$INPROGRESS_FILE" > /dev/null 2>&1 ; then
+	if pgrep -F "$INPROGRESS_FILE" "$APPNAME" > /dev/null 2>&1 ; then
 		fn_log_error "previous backup task is still active - aborting."
 		exit 1
 	fi
