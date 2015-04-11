@@ -81,10 +81,14 @@ fn_usage() {
 	fn_log_info "  diff <backup_location1> <backup_location2>"
 	fn_log_info "      show differences between two backups."
 	fn_log_info
-	fn_log_info "General options:"
+	fn_log_info "Options:"
 	fn_log_info
 	fn_log_info "  -s, --syslog"
 	fn_log_info "      log output to syslogd"
+	fn_log_info
+	fn_log_info "  -k, --keep-expired"
+	fn_log_info "      do not delete expired backups until they can be reused by subsequent backups or"
+	fn_log_info "      the backup location runs out of space."
 	fn_log_info
 	fn_log_info "  -v, --verbose"
 	fn_log_info "      increase verbosity"
@@ -281,6 +285,7 @@ fn_delete_backups() {
 # set defaults
 OPT_VERBOSE="false"
 OPT_SYSLOG="false"
+OPT_KEEP_EXPIRED="false"
 
 # parse arguments
 while [ "$#" -gt 0 ]; do
@@ -295,6 +300,9 @@ while [ "$#" -gt 0 ]; do
 		-s|--syslog)
 			OPT_SYSLOG="true"
 			exec 40> >(exec logger -t "$APPNAME[$$]")
+		;;
+		-k|--keep-expired)
+			OPT_KEEP_EXPIRED="true"
 		;;
 		init)
 			if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
@@ -545,7 +553,9 @@ ln -s -- "$(basename "$DEST")" "$DEST_FOLDER/latest"
 # delete expired backups
 # -----------------------------------------------------------------------------
 
-fn_delete_backups
+if [ "$OPT_KEEP_EXPIRED" != "true" ]; then
+	fn_delete_backups
+fi
 
 # -----------------------------------------------------------------------------
 # exit
