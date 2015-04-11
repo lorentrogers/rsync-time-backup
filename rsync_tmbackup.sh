@@ -78,7 +78,7 @@ fn_usage() {
 	fn_log_info "      create a Time Machine like backup from <src_location> at <backup_location>."
 	fn_log_info "      optional: exclude files in <exclude_file> from backup"
 	fn_log_info
-	fn_log_info "  diff <backup_location1> <backup_location2>"
+	fn_log_info "  diff <backup1> <backup2>"
 	fn_log_info "      show differences between two backups."
 	fn_log_info
 	fn_log_info "Options:"
