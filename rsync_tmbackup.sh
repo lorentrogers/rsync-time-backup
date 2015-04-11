@@ -278,8 +278,194 @@ fn_delete_backups() {
 	rmdir -- "$EXPIRED_DIR"
 }
 
+fn_backup() {
+
+	# -----------------------------------------------------------------------------
+	# Check that the destination directory is a backup location
+	# -----------------------------------------------------------------------------
+	fn_log_info "backup location: $DEST_FOLDER/"
+	fn_log_info "backup source path: $SRC_FOLDER/"
+	readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
+	# this function sets variable $UTC dependent on backup marker content
+	fn_check_backup_marker
+
+	# -----------------------------------------------------------------------------
+	# Basic variables
+	# -----------------------------------------------------------------------------
+	if [ "$UTC" == "true" ]; then
+		readonly NOW=$(date -u +"%Y-%m-%d-%H%M%S")
+		fn_log_info "backup time base: UTC"
+		readonly NOW=$(date +"%Y-%m-%d-%H%M%S")
+		fn_log_info "backup time base: local time"
+	fi
+
+	readonly DEST="$DEST_FOLDER/$NOW"
+	readonly INPROGRESS_FILE="$DEST_FOLDER/backup.inprogress"
+	readonly EXPIRED_DIR="$DEST_FOLDER/expired"
+	readonly TMP_RSYNC_LOG=$(mktemp "/tmp/${APPNAME}_XXXXXXXXXX")
+
+	# Better for handling spaces in filenames.
+	export IFS=$'\n'
+
+	# -----------------------------------------------------------------------------
+	# Check for previous backup operations
+	# -----------------------------------------------------------------------------
+	PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
+
+	if [ -f "$INPROGRESS_FILE" ]; then
+		if pgrep -F "$INPROGRESS_FILE" "$APPNAME" > /dev/null 2>&1 ; then
+			fn_log_error "previous backup task is still active - aborting."
+			exit 1
+		fi
+		echo "$$" > "$INPROGRESS_FILE"
+		if [ -d "$PREVIOUS_DEST" ]; then
+			fn_log_info "previous backup $PREVIOUS_DEST was interrupted - resuming from there."
+
+			# - Last backup is moved to current backup folder so that it can be resumed.
+			# - 2nd to last backup becomes last backup.
+			mv -- "$PREVIOUS_DEST" "$DEST"
+			if [ "$(fn_find_backups | wc -l)" -gt 1 ]; then
+				PREVIOUS_DEST="$(fn_find_backups | sed -n '2p')"
+			else
+				PREVIOUS_DEST=""
+			fi
+		fi
+	else
+		echo "$$" > "$INPROGRESS_FILE"
+	fi
+
+	# -----------------------------------------------------------------------------
+	# expire existing backups
+	# -----------------------------------------------------------------------------
+	fn_log_info "expiring backups..."
+	fn_expire_backups "$NOW"
+
+	# -----------------------------------------------------------------------------
+	# create backup directory
+	# -----------------------------------------------------------------------------
+	LAST_EXPIRED="$(fn_find_backups expired | head -n 1)"
+
+	if [ -n "$LAST_EXPIRED" ]; then
+		# reuse the newest expired backup as the basis for the next rsync
+		# operation. this significantly speeds up backup times!
+		# to work rsync needs the following options: --delete --delete-excluded
+		fn_log_info "reusing expired backup $(basename $LAST_EXPIRED)"
+		mv "$LAST_EXPIRED" "$DEST"
+	else
+		# a new backup directory is needed
+		fn_mkdir "$DEST"
+	fi
+
+	# -----------------------------------------------------------------------------
+	# Run in a loop to handle the "No space left on device" logic.
+	# -----------------------------------------------------------------------------
+	while : ; do
+
+		# -----------------------------------------------------------------------------
+		# Start backup
+		# -----------------------------------------------------------------------------
+		CMD="rsync"
+		CMD="$CMD --compress"
+		CMD="$CMD --numeric-ids"
+		CMD="$CMD --links"
+		CMD="$CMD --hard-links"
+		CMD="$CMD --one-file-system"
+		CMD="$CMD --archive"
+		CMD="$CMD --itemize-changes"
+		CMD="$CMD --verbose"
+		CMD="$CMD --human-readable"
+		CMD="$CMD --delete --delete-excluded"
+		CMD="$CMD --log-file '$TMP_RSYNC_LOG'"
+
+		if [ -n "$EXCLUSION_FILE" ]; then
+			# We've already checked that $EXCLUSION_FILE doesn't contain a single quote
+			CMD="$CMD --exclude-from '$EXCLUSION_FILE'"
+		fi
+		if [ -n "$PREVIOUS_DEST" ]; then
+			# If the path is relative, it needs to be relative to the destination. To keep
+			# it simple, just use an absolute path. See http://serverfault.com/a/210058/118679
+			PREVIOUS_DEST="$(cd "$PREVIOUS_DEST"; pwd)"
+			fn_log_info "doing incremental backup from $(basename $PREVIOUS_DEST)"
+			CMD="$CMD --link-dest='$PREVIOUS_DEST'"
+		fi
+		CMD="$CMD -- '$SRC_FOLDER/' '$DEST/'"
+
+		fn_log_info "backup name $(basename $DEST)"
+		fn_log_info "rsync start"
+
+		CMD="$CMD | grep -v -E '^[*]?deleting|^$|^.[Ld]\.\.t\.\.\.\.\.\.'"
+		if [ "$OPT_VERBOSE" == "true" ]; then
+			fn_log_info "$CMD"
+		fi
+		if [ "$OPT_SYSLOG" == "true" ]; then
+			CMD="$CMD | tee /dev/stderr 2>&40"
+		fi
+		eval "$CMD"
+
+		fn_log_info "rsync end"
+
+		# -----------------------------------------------------------------------------
+		# Check if we ran out of space
+		# -----------------------------------------------------------------------------
+
+		# TODO: find better way to check for out of space condition without parsing log.
+		NO_SPACE_LEFT="$(grep "No space left on device (28)\|Result too large (34)" "$TMP_RSYNC_LOG")"
+
+		if [ -n "$NO_SPACE_LEFT" ]; then
+			if [ -z "$(fn_find_backups expired)" ]; then
+				# no backups scheduled for deletion, delete oldest backup
+				fn_log_warn "No space left on device, removing oldest backup"
+
+				if [[ "$(fn_find_backups | wc -l)" -lt "2" ]]; then
+					fn_log_error "No space left on device, and no old backup to delete."
+					exit 1
+				fi
+				fn_mark_expired "$(fn_find_backups | tail -n 1)"
+			fi
+
+			fn_delete_backups
+
+			# Resume backup
+			continue
+		fi
+
+		break
+	done
+
+	# -----------------------------------------------------------------------------
+	# Check whether rsync reported any errors
+	# -----------------------------------------------------------------------------
+	if [ -n "$(grep "^rsync:" "$TMP_RSYNC_LOG")" ]; then
+		fn_log_warn "Rsync reported a warning."
+	fi
+	if [ -n "$(grep "^rsync error:" "$TMP_RSYNC_LOG")" ]; then
+		fn_log_error "Rsync reported an error - exiting."
+		exit 1
+	fi
+
+	# -----------------------------------------------------------------------------
+	# Add symlink to last successful backup
+	# -----------------------------------------------------------------------------
+	rm -f -- "$DEST_FOLDER/latest"
+	ln -s -- "$(basename "$DEST")" "$DEST_FOLDER/latest"
+
+	# -----------------------------------------------------------------------------
+	# delete expired backups
+	# -----------------------------------------------------------------------------
+	if [ "$OPT_KEEP_EXPIRED" != "true" ]; then
+		fn_delete_backups
+	fi
+
+	# -----------------------------------------------------------------------------
+	# end backup
+	# -----------------------------------------------------------------------------
+	rm -f -- "$INPROGRESS_FILE"
+
+	fn_log_info "backup $DEST completed successfully."
+}
+
 # -----------------------------------------------------------------------------
-# parse command line arguments
+# main
 # -----------------------------------------------------------------------------
 
 # set defaults
@@ -287,7 +473,7 @@ OPT_VERBOSE="false"
 OPT_SYSLOG="false"
 OPT_KEEP_EXPIRED="false"
 
-# parse arguments
+# parse command line arguments
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		-h|--help)
@@ -355,7 +541,8 @@ while [ "$#" -gt 0 ]; do
 					exit 1
 				fi
 			done
-			break
+			fn_backup
+			exit 0
 		;;
 		*)
 			fn_log_error "Invalid argument '$1'. Use --help for more information."
@@ -365,203 +552,6 @@ while [ "$#" -gt 0 ]; do
 	shift
 done
 
-if [ "$#" -eq 0 ]; then
-        fn_log_info "Usage: $APPNAME [OPTIONS] command [ARGS]"
-        fn_log_info "Try '$APPNAME --help' for more information."
-        exit 0
-fi
-
-# -----------------------------------------------------------------------------
-# Check that the destination directory is a backup location
-# -----------------------------------------------------------------------------
-
-fn_log_info "backup location: $DEST_FOLDER/"
-fn_log_info "backup source path: $SRC_FOLDER/"
-readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
-# this function sets variable $UTC dependent on backup marker content
-fn_check_backup_marker
-
-# -----------------------------------------------------------------------------
-# Basic variables
-# -----------------------------------------------------------------------------
-
-if [ "$UTC" == "true" ]; then
-	readonly NOW=$(date -u +"%Y-%m-%d-%H%M%S")
-	fn_log_info "backup time base: UTC"
-else
-	readonly NOW=$(date +"%Y-%m-%d-%H%M%S")
-	fn_log_info "backup time base: local time"
-fi
-
-readonly DEST="$DEST_FOLDER/$NOW"
-readonly INPROGRESS_FILE="$DEST_FOLDER/backup.inprogress"
-readonly EXPIRED_DIR="$DEST_FOLDER/expired"
-readonly TMP_RSYNC_LOG=$(mktemp "/tmp/${APPNAME}_XXXXXXXXXX")
-
-# Better for handling spaces in filenames.
-export IFS=$'\n'
-
-# -----------------------------------------------------------------------------
-# Check for previous backup operations
-# -----------------------------------------------------------------------------
-
-PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
-
-if [ -f "$INPROGRESS_FILE" ]; then
-	if pgrep -F "$INPROGRESS_FILE" "$APPNAME" > /dev/null 2>&1 ; then
-		fn_log_error "previous backup task is still active - aborting."
-		exit 1
-	fi
-	echo "$$" > "$INPROGRESS_FILE"
-	if [ -d "$PREVIOUS_DEST" ]; then
-		fn_log_info "previous backup $PREVIOUS_DEST was interrupted - resuming from there."
-
-		# - Last backup is moved to current backup folder so that it can be resumed.
-		# - 2nd to last backup becomes last backup.
-		mv -- "$PREVIOUS_DEST" "$DEST"
-		if [ "$(fn_find_backups | wc -l)" -gt 1 ]; then
-			PREVIOUS_DEST="$(fn_find_backups | sed -n '2p')"
-		else
-			PREVIOUS_DEST=""
-		fi
-	fi
-else
-	echo "$$" > "$INPROGRESS_FILE"
-fi
-
-# -----------------------------------------------------------------------------
-# expire existing backups
-# -----------------------------------------------------------------------------
-
-fn_log_info "expiring backups..."
-fn_expire_backups "$NOW"
-
-# -----------------------------------------------------------------------------
-# create backup directory
-# -----------------------------------------------------------------------------
-
-LAST_EXPIRED="$(fn_find_backups expired | head -n 1)"
-
-if [ -n "$LAST_EXPIRED" ]; then
-	# reuse the newest expired backup as the basis for the next rsync
-	# operation. this significantly speeds up backup times!
-	# to work rsync needs the following options: --delete --delete-excluded
-	fn_log_info "reusing expired backup $(basename $LAST_EXPIRED)"
-	mv "$LAST_EXPIRED" "$DEST"
-else
-	# a new backup directory is needed
-	fn_mkdir "$DEST"
-fi
-
-# -----------------------------------------------------------------------------
-# Run in a loop to handle the "No space left on device" logic.
-# -----------------------------------------------------------------------------
-while : ; do
-
-	# -----------------------------------------------------------------------------
-	# Start backup
-	# -----------------------------------------------------------------------------
-
-	CMD="rsync"
-	CMD="$CMD --compress"
-	CMD="$CMD --numeric-ids"
-	CMD="$CMD --links"
-	CMD="$CMD --hard-links"
-	CMD="$CMD --one-file-system"
-	CMD="$CMD --archive"
-	CMD="$CMD --itemize-changes"
-	CMD="$CMD --verbose"
-	CMD="$CMD --human-readable"
-	CMD="$CMD --delete --delete-excluded"
-	CMD="$CMD --log-file '$TMP_RSYNC_LOG'"
-
-	if [ -n "$EXCLUSION_FILE" ]; then
-		# We've already checked that $EXCLUSION_FILE doesn't contain a single quote
-		CMD="$CMD --exclude-from '$EXCLUSION_FILE'"
-	fi
-	if [ -n "$PREVIOUS_DEST" ]; then
-		# If the path is relative, it needs to be relative to the destination. To keep
-		# it simple, just use an absolute path. See http://serverfault.com/a/210058/118679
-		PREVIOUS_DEST="$(cd "$PREVIOUS_DEST"; pwd)"
-		fn_log_info "doing incremental backup from $(basename $PREVIOUS_DEST)"
-		CMD="$CMD --link-dest='$PREVIOUS_DEST'"
-	fi
-	CMD="$CMD -- '$SRC_FOLDER/' '$DEST/'"
-
-	fn_log_info "backup name $(basename $DEST)"
-	fn_log_info "rsync start"
-
-	CMD="$CMD | grep -v -E '^[*]?deleting|^$|^.[Ld]\.\.t\.\.\.\.\.\.'"
-	if [ "$OPT_VERBOSE" == "true" ]; then
-		fn_log_info "$CMD"
-	fi
-	if [ "$OPT_SYSLOG" == "true" ]; then
-		CMD="$CMD | tee /dev/stderr 2>&40"
-	fi
-	eval "$CMD"
-
-	fn_log_info "rsync end"
-
-	# -----------------------------------------------------------------------------
-	# Check if we ran out of space
-	# -----------------------------------------------------------------------------
-
-	# TODO: find better way to check for out of space condition without parsing log.
-	NO_SPACE_LEFT="$(grep "No space left on device (28)\|Result too large (34)" "$TMP_RSYNC_LOG")"
-
-	if [ -n "$NO_SPACE_LEFT" ]; then
-		if [ -z "$(fn_find_backups expired)" ]; then
-			# no backups scheduled for deletion, delete oldest backup
-			fn_log_warn "No space left on device, removing oldest backup"
-
-			if [[ "$(fn_find_backups | wc -l)" -lt "2" ]]; then
-				fn_log_error "No space left on device, and no old backup to delete."
-				exit 1
-			fi
-			fn_mark_expired "$(fn_find_backups | tail -n 1)"
-		fi
-
-		fn_delete_backups
-
-		# Resume backup
-		continue
-	fi
-
-	break
-done
-
-# -----------------------------------------------------------------------------
-# Check whether rsync reported any errors
-# -----------------------------------------------------------------------------
-
-if [ -n "$(grep "^rsync:" "$TMP_RSYNC_LOG")" ]; then
-	fn_log_warn "Rsync reported a warning."
-fi
-if [ -n "$(grep "^rsync error:" "$TMP_RSYNC_LOG")" ]; then
-	fn_log_error "Rsync reported an error - exiting."
-	exit 1
-fi
-
-# -----------------------------------------------------------------------------
-# Add symlink to last successful backup
-# -----------------------------------------------------------------------------
-
-rm -f -- "$DEST_FOLDER/latest"
-ln -s -- "$(basename "$DEST")" "$DEST_FOLDER/latest"
-
-# -----------------------------------------------------------------------------
-# delete expired backups
-# -----------------------------------------------------------------------------
-
-if [ "$OPT_KEEP_EXPIRED" != "true" ]; then
-	fn_delete_backups
-fi
-
-# -----------------------------------------------------------------------------
-# exit
-# -----------------------------------------------------------------------------
-
-rm -f -- "$INPROGRESS_FILE"
-
-fn_log_info "backup $DEST completed successfully."
+fn_log_info "Usage: $APPNAME [OPTIONS] command [ARGS]"
+fn_log_info "Try '$APPNAME --help' for more information."
 exit 0
