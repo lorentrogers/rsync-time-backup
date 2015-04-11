@@ -295,6 +295,7 @@ fn_backup() {
 	if [ "$UTC" == "true" ]; then
 		readonly NOW=$(date -u +"%Y-%m-%d-%H%M%S")
 		fn_log_info "backup time base: UTC"
+	else
 		readonly NOW=$(date +"%Y-%m-%d-%H%M%S")
 		fn_log_info "backup time base: local time"
 	fi
