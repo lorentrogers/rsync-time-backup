@@ -5,14 +5,14 @@
   1. expire backups by moving them to an expired folder (fast!)
   2. create new backup
   3. delete old backups thereafter (slow!, all inodes have to be removed)
-- backup speedup: minimize inode deletions/creations by reusing old backups, since usually 
-most inodes have no changed even compared to older backups
+- shorter backup times: 
+  - minimize inode deletions/creations by reusing old backups - usually most inodes have not changed even compared to older backups
 - backup.marker file can be used as config file
   - more flexible and configurable backup expiration windows
   - UTC & local time handling as part of backup.marker config
-- option to log to syslog
-- more flexible command line interface
-- new subcommands and options
+- flexible command line interface, new subcommands and options
+  - compare to backups, initialize backup marker, ...
+  - option to log to syslog
 
 __Everything NOT YET documented below, look at the source code.__
 
