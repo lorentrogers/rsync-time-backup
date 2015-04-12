@@ -6,7 +6,7 @@
   2. create new backup
   3. delete old backups thereafter (slow!, all inodes have to be removed)
 - shorter backup times: 
-  - minimize inode deletions/creations by reusing old backups - usually most inodes have not changed even compared to older backups
+  - minimize inode deletions/creations by reusing expired backups - usually most files/inodes have not changed even compared to older backups
 - backup.marker file can be used as config file
   - more flexible and configurable backup expiration windows
   - UTC & local time handling as part of backup.marker config
