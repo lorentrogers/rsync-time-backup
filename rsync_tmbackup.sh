@@ -455,6 +455,9 @@ fn_backup() {
 	# -----------------------------------------------------------------------------
 	if [ "$OPT_KEEP_EXPIRED" != "true" ]; then
 		fn_delete_backups
+	elif [ ! "$(ls -A $EXPIRED_DIR)" ]; then
+		# remove empty expired directory in any case
+		rmdir -- "$EXPIRED_DIR"
 	fi
 
 	# -----------------------------------------------------------------------------
