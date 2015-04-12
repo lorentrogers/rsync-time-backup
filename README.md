@@ -14,7 +14,7 @@ most inodes have no changed even compared to older backups
 - more flexible command line interface
 - new subcommands and options
 
-_Everything NOT YET documented below, look at the source code._
+__Everything NOT YET documented below, look at the source code.__
 
 ## Description
 
