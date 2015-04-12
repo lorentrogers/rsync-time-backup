@@ -1,4 +1,22 @@
 # Rsync time backup
+## MAIN IMPROVEMENTS and NEW FEATURES of this fork
+
+- more priority for new backups:
+  1. expire backups by moving them to an expired folder (fast!)
+  2. create new backup
+  3. delete old backups thereafter (slow!, all inodes have to be removed)
+- backup speedup: minimize inode deletions/creations by reusing old backups, since usually 
+most inodes have no changed even compared to older backups
+- backup.marker file can be used as config file
+  - more flexible and configurable backup expiration windows
+  - UTC & local time handling as part of backup.marker config
+- option to log to syslog
+- more flexible command line interface
+- new subcommands and options
+
+_Everything NOT YET documented below, look at the source code._
+
+## Description
 
 Time Machine style backup with rsync. Should work on Linux, OS X and Windows with Cygwin. The main advantage over Time Machine is the flexibility as it can backup from/to any filesystem and works on any platform. You can also backup, for example, to a Truecrypt drive without any problem.
 
