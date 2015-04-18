@@ -121,10 +121,10 @@ fn_mkdir() {
 fn_find_backups() {
 	if [ "$1" == "expired" ]; then
 		if [ -d "$EXPIRED_DIR" ]; then
-			find "$EXPIRED_DIR" -type d -name "????-??-??-??????" -prune | sort -r
+			find "$EXPIRED_DIR" -maxdepth 1 -type d -name "????-??-??-??????" | sort -r
 		fi
 	else
-		find "$DEST_FOLDER" -type d -name "????-??-??-??????" -prune | sort -r
+		find "$DEST_FOLDER" -maxdepth 1 -type d -name "????-??-??-??????" | sort -r
 	fi
 }
 
@@ -199,7 +199,7 @@ fn_expire_backups() {
 	# Default value for $PREV_BACKUP_DATE ensures that the most recent backup is never deleted.
 	local PREV_BACKUP_DATE="0000-00-00-000000"
 	local BACKUP
-	for BACKUP in $(fn_find_backups | sort -r); do
+	for BACKUP in $(fn_find_backups); do
 
 		# BACKUP_DATE format YYYY-MM-DD-HHMMSS
 		local BACKUP_DATE=$(basename "$BACKUP")
