@@ -24,6 +24,7 @@ This is a fork of the script from Laurent Cozic with the following main improvem
 
 # Usage
 
+```
 rsync_tmbackup.sh [OPTIONS] command [ARGS]
 
 Commands:
@@ -59,6 +60,7 @@ Options:
 
   -h, --help
       this help text
+```
 
 # Features
 
