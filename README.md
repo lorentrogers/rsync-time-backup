@@ -1,28 +1,13 @@
 # Time machine style backups using rsync
-# Description
+## Description
 
 Time Machine style backups with rsync. Tested on Linux, but should work on any platform since this script has no OS/file system specific dependecies like the original.
 
-This is a fork of the script from Laurent Cozic with the following main improvements/changes:
-
-* more priority for new backups:
-  1. expire backups by moving them to an expired folder (fast!)
-  2. create new backup
-  3. delete old backups thereafter (slow!, all inodes have to be removed)
-* shorter backup times: 
-  - minimize inode deletions/creations by reusing expired backups - usually most files/inodes have not changed even compared to older backups
-* backup.marker file can be used as config file
-  - more flexible and configurable backup expiration windows
-  - UTC & local time handling as part of backup.marker config
-* flexible command line interface, new subcommands and options
-  - compare to backups, initialize backup marker, ...
-  - option to log to syslog
-
-# Installation
+## Installation
 
 	git clone https://github.com/eaut/rsync-time-backup
 
-# Usage
+## Usage
 
 ```
 rsync_tmbackup.sh [OPTIONS] command [ARGS]
@@ -62,7 +47,24 @@ Options:
       this help text
 ```
 
-# Features
+## Features
+
+### Improvements/changes compared to Laurent Cozic's version
+
+* more priority for new backups:
+  1. expire backups by moving them to an expired folder (fast!)
+  2. create new backup
+  3. delete old backups thereafter (slow!, all inodes have to be removed)
+* shorter backup times: 
+  - minimize inode deletions/creations by reusing expired backups - usually most files/inodes have not changed even compared to older backups
+* backup.marker file can be used as config file
+  - more flexible and configurable backup expiration windows
+  - UTC & local time handling as part of backup.marker config
+* flexible command line interface, new subcommands and options
+  - compare to backups, initialize backup marker, ...
+  - option to log to syslog
+
+###  Unchanged
 
 * Each backup is on its own folder named after the current timestamp. Files can be copied and restored directly, without any intermediate tool.
 
@@ -78,7 +80,7 @@ Options:
 
 * The application is just one bash script that can be easily edited.
 
-# LICENSE
+## LICENSE
 
 The MIT License (MIT)
 
