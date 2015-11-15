@@ -1,48 +1,64 @@
-# Rsync time backup
-## MAIN IMPROVEMENTS and NEW FEATURES of this fork
+# Time machine style backups using rsync
+# Description
 
-- more priority for new backups:
+Time Machine style backups with rsync. Tested on Linux, but should work on any platform since this script has no OS/file system specific dependecies like the original.
+
+This is a fork of the script from Laurent Cozic with the following main improvements/changes:
+
+* more priority for new backups:
   1. expire backups by moving them to an expired folder (fast!)
   2. create new backup
   3. delete old backups thereafter (slow!, all inodes have to be removed)
-- shorter backup times: 
+* shorter backup times: 
   - minimize inode deletions/creations by reusing expired backups - usually most files/inodes have not changed even compared to older backups
-- backup.marker file can be used as config file
+* backup.marker file can be used as config file
   - more flexible and configurable backup expiration windows
   - UTC & local time handling as part of backup.marker config
-- flexible command line interface, new subcommands and options
+* flexible command line interface, new subcommands and options
   - compare to backups, initialize backup marker, ...
   - option to log to syslog
 
-__Everything NOT YET documented below, look at the source code.__
-
-## Description
-
-Time Machine style backup with rsync. Should work on Linux, OS X and Windows with Cygwin. The main advantage over Time Machine is the flexibility as it can backup from/to any filesystem and works on any platform. You can also backup, for example, to a Truecrypt drive without any problem.
-
-On OS X, it has a few disadvantages compared to Time Machine - in particular it doesn't auto-start when the backup drive is plugged (though it can be achieved using a launch agent), it requires some knowledge of the command line, and no specific GUI is provided to restore files. Instead files can be restored by using any file explorer, including Finder, or the command line.
-
 # Installation
 
-	git clone https://github.com/laurent22/rsync-time-backup
+	git clone https://github.com/eaut/rsync-time-backup
 
 # Usage
 
-	rsync_tmbackup.sh <source> <destination> [excluded-pattern-path]
+rsync_tmbackup.sh [OPTIONS] command [ARGS]
 
-## Examples
-	
-* Backup the home folder to backup_drive
-	
-		rsync_tmbackup.sh /home /mnt/backup_drive  
+Commands:
 
-* Backup with exclusion list:
-	
-		rsync_tmbackup.sh /home /mnt/backup_drive excluded_patterns.txt
-	
-## Exclude file
+  init <backup_location> [--local-time]
+      initialize <backup_location> by creating a backup marker file.
 
-An optional exclude file can be provided as a third parameter. It should be compatible with the `--exclude-from` parameter of rsync. See [this tutorial] (https://sites.google.com/site/rsync2u/home/rsync-tutorial/the-exclude-from-option) for more information.
+         --local-time
+             name all backups using local time, per default backups
+             are named using UTC.
+
+  backup <src_location> <backup_location> [<exclude_file>]
+      create a Time Machine like backup from <src_location> at <backup_location>.
+      optional: exclude files in <exclude_file> from backup
+
+  diff <backup1> <backup2>
+      show differences between two backups.
+
+Options:
+
+  -s, --syslog
+      log output to syslogd
+
+  -k, --keep-expired
+      do not delete expired backups until they can be reused by subsequent backups or
+      the backup location runs out of space.
+
+  -v, --verbose
+      increase verbosity
+
+  --version
+      display version and exit
+
+  -h, --help
+      this help text
 
 # Features
 
@@ -54,27 +70,18 @@ An optional exclude file can be provided as a third parameter. It should be comp
 
 * Resume feature - if a backup has failed or was interrupted, the tool will resume from there on the next backup.
 
-* Exclude file - support for pattern-based exclusion via the `--exclude-from` rsync parameter.
-
 * Automatically purge old backups - within 24 hours, all backups are kept. Within one month, the most recent backup for each day is kept. For all previous backups, the most recent of each month is kept.
 
 * "latest" symlink that points to the latest successful backup.
 
 * The application is just one bash script that can be easily edited.
 
-# TODO
-
-* Check source and destination file-system. If one of them is FAT, use the --modify-window rsync parameter (see `man rsync`) with a value of 1 or 2.
-
-* Minor changes (see TODO comments in the source).
-
-* Backup to remote drive?
-
 # LICENSE
 
 The MIT License (MIT)
 
 Copyright (c) 2013-2014 Laurent Cozic
+Copyright (c) 2015 eaut
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -93,5 +100,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/laurent22/rsync-time-backup/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
