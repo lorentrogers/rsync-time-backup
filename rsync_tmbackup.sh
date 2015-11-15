@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-readonly APPNAME=$(basename ${0%.sh})
+readonly APPNAME=$(basename "${0%.sh}")
 readonly VERSION=0.1.0
 
 # -----------------------------------------------------------------------------
