@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-readonly APPNAME=$(basename ${0%.sh})
+readonly APPNAME=$(basename "${0%.sh}")
+readonly VERSION=0.1.0
 
 # -----------------------------------------------------------------------------
 # Log functions
@@ -92,6 +93,9 @@ fn_usage() {
 	fn_log_info
 	fn_log_info "  -v, --verbose"
 	fn_log_info "      increase verbosity"
+	fn_log_info
+	fn_log_info "  --version"
+	fn_log_info "      display version and exit"
 	fn_log_info
 	fn_log_info "  -h, --help"
 	fn_log_info "      this help text"
@@ -484,6 +488,10 @@ while [ "$#" -gt 0 ]; do
 			fn_usage
 			exit 0
 		;;
+		--version)
+			echo $APPNAME version $VERSION
+			exit 0
+		;;		
 		-v|--verbose)
 			OPT_VERBOSE="true"
 		;;
