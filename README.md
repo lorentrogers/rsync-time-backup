@@ -1,7 +1,7 @@
 # Time machine style backups using rsync
 ## Description
 
-Time Machine style backups with rsync. Tested on Linux, but should work on any platform since this script has no OS/file system specific dependecies like the original.
+Time Machine style backups with rsync. Tested on Linux, but should work on any platform since this script has no operating system or file system specific dependencies like the original.
 
 ## Installation
 
