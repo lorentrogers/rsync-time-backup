@@ -47,6 +47,23 @@ Options:
       this help text
 ```
 
+## crontab example
+
+	# backup /home at quarter past every hour to /mnt/backup
+	15 * * * * rsync_tmbackup.sh -v -s -k backup /home /mnt/backup /mnt/backup/backup.exclude
+
+## customize backup rentention times
+
+The backup marker file is also used as configuration file for backup retention times. Defaults shown below can be modified if needed.
+
+```
+RETENTION_WIN_ALL="$((4 * 3600))"        # 4 hrs
+RETENTION_WIN_01H="$((1 * 24 * 3600))"   # 24 hrs
+RETENTION_WIN_04H="$((3 * 24 * 3600))"   # 3 days
+RETENTION_WIN_08H="$((14 * 24 * 3600))"  # 2 weeks
+RETENTION_WIN_24H="$((28 * 24 * 3600))"  # 4 weeks
+```
+
 ## Features
 
 ### Improvements/changes compared to Laurent Cozic's version
