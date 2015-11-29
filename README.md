@@ -47,12 +47,12 @@ Options:
       this help text
 ```
 
-## crontab example
+### crontab example
 
 	# backup /home at quarter past every hour to /mnt/backup
 	15 * * * * rsync_tmbackup.sh -v -s -k backup /home /mnt/backup /mnt/backup/backup.exclude
 
-## customize backup rentention times
+### customize backup rentention times
 
 The backup marker file is also used as configuration file for backup retention times. Defaults shown below can be modified if needed.
 
