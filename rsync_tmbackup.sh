@@ -370,15 +370,15 @@ fn_backup() {
     # Start backup
     # -----------------------------------------------------------------------------
     CMD="rsync"
-    CMD="$CMD --numeric-ids"
-    CMD="$CMD --hard-links"
-    CMD="$CMD --one-file-system"
     CMD="$CMD --archive"
-    CMD="$CMD --itemize-changes"
-    CMD="$CMD --verbose"
-    CMD="$CMD --human-readable"
+    CMD="$CMD --hard-links"
+    CMD="$CMD --numeric-ids"
     CMD="$CMD --delete --delete-excluded"
+    CMD="$CMD --one-file-system"
+    CMD="$CMD --itemize-changes"
+    CMD="$CMD --human-readable"
     CMD="$CMD --log-file '$TMP_RSYNC_LOG'"
+    CMD="$CMD --verbose"
 
     if [ -n "$EXCLUSION_FILE" ]; then
       # We've already checked that $EXCLUSION_FILE doesn't contain a single quote
