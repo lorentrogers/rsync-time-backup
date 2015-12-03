@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 
+# -----------------------------------------------------------------------------
+# Variables
+# -----------------------------------------------------------------------------
+
+OPT_VERBOSE="false"
+OPT_SYSLOG="false"
+OPT_KEEP_EXPIRED="false"
 readonly APPNAME=$(basename "${0%.sh}")
 readonly VERSION=0.1.0
 
 # -----------------------------------------------------------------------------
-# Log functions
+# Functions
 # -----------------------------------------------------------------------------
 
 fn_log_info() {
@@ -28,25 +35,13 @@ fn_log_error() {
   echo "[ERROR] $1" 1>&2
 }
 
-# -----------------------------------------------------------------------------
-# traps
-# -----------------------------------------------------------------------------
-
-# ---
 # Make sure everything really stops when CTRL+C is pressed
-# ---
-
 fn_terminate_script() {
   fn_log_info "SIGINT caught."
   exit 1
 }
 
-trap fn_terminate_script SIGINT
-
-# ---
 # clean up on exit
-# ---
-
 fn_cleanup() {
   if [ -n "$TMP_RSYNC_LOG" ]; then
     rm -f -- $TMP_RSYNC_LOG
@@ -56,12 +51,6 @@ fn_cleanup() {
     exec 40>&-
   fi
 }
-
-trap fn_cleanup EXIT
-
-# -----------------------------------------------------------------------------
-# functions
-# -----------------------------------------------------------------------------
 
 fn_usage() {
   fn_log_info "Usage: $APPNAME [OPTIONS] command [ARGS]"
@@ -132,6 +121,8 @@ fn_find_backups() {
   fi
 }
 
+# Creates the backup marker and populates it with
+# default settings, if it does not already have them.
 fn_set_backup_marker() {
   if [ "$1" == "UTC" ]; then
     echo "UTC=true" > "$BACKUP_MARKER_FILE"
@@ -151,10 +142,16 @@ __EOF__
   fn_log_info "Backup marker $BACKUP_MARKER_FILE created."
 }
 
+# Confirms that the backup marker exists in the destination folder.
+# Checks if write permissions are properly set.
+# Reads the contents of the backup.marker file, or creates defaults if
+# they do not yet exist.
+# TODO: check that the destination supports hard links
+# TODO: Split this into multiple sub-functions. too heavy.
+# TODO: Use variables to set default values for retention and utc
+#       instead of typing them out again here.
 fn_check_backup_marker() {
-  #
   # TODO: check that the destination supports hard links
-  #
   if [ ! -f "$BACKUP_MARKER_FILE" ]; then
     fn_log_error "Destination does not appear to be a backup location - no backup marker file found."
     exit 1
@@ -191,9 +188,7 @@ fn_mark_expired() {
 fn_expire_backups() {
   local NOW_TS=$(fn_parse_date "$1")
 
-  #
   # backup aggregation windows and retention times
-  #
   local LIMIT_ALL_TS=$((NOW_TS - RETENTION_WIN_ALL))  # until this point in time all backups are retained
   local LIMIT_1H_TS=$((NOW_TS  - RETENTION_WIN_01H))  # max 1 backup per hour
   local LIMIT_4H_TS=$((NOW_TS  - RETENTION_WIN_04H))  # max 1 backup per 4 hours
@@ -282,20 +277,19 @@ fn_delete_backups() {
   rmdir -- "$EXPIRED_DIR"
 }
 
+# Runs a backup of the source files into the destination.
+# Uses the exclude file if provided to specify which files are backed up.
+# TODO: This function is way too heavy...
 fn_backup() {
 
-  # ---------------------------------------------------------------------------
   # Check that the destination directory is a backup location
-  # ---------------------------------------------------------------------------
   fn_log_info "backup location: $DEST_FOLDER/"
   fn_log_info "backup source path: $SRC_FOLDER/"
   readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
   # this function sets variable $UTC dependent on backup marker content
   fn_check_backup_marker
 
-  # ---------------------------------------------------------------------------
   # Basic variables
-  # ---------------------------------------------------------------------------
   if [ "$UTC" == "true" ]; then
     readonly NOW=$(date -u +"%Y-%m-%d-%H%M%S")
     fn_log_info "backup time base: UTC"
@@ -312,9 +306,7 @@ fn_backup() {
   # Better for handling spaces in filenames.
   export IFS=$'\n'
 
-  # -----------------------------------------------------------------------------
   # Check for previous backup operations
-  # -----------------------------------------------------------------------------
   PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
 
   if [ -f "$INPROGRESS_FILE" ]; then
@@ -339,15 +331,11 @@ fn_backup() {
     echo "$$" > "$INPROGRESS_FILE"
   fi
 
-  # -----------------------------------------------------------------------------
   # expire existing backups
-  # -----------------------------------------------------------------------------
   fn_log_info "expiring backups..."
   fn_expire_backups "$NOW"
 
-  # -----------------------------------------------------------------------------
   # create backup directory
-  # -----------------------------------------------------------------------------
   LAST_EXPIRED="$(fn_find_backups expired | head -n 1)"
 
   if [ -n "$LAST_EXPIRED" ]; then
@@ -361,14 +349,10 @@ fn_backup() {
     fn_mkdir "$DEST"
   fi
 
-  # -----------------------------------------------------------------------------
   # Run in a loop to handle the "No space left on device" logic.
-  # -----------------------------------------------------------------------------
   while : ; do
 
-    # -----------------------------------------------------------------------------
     # Start backup
-    # -----------------------------------------------------------------------------
     CMD="rsync"
     CMD="$CMD --archive"
     CMD="$CMD --hard-links"
@@ -407,10 +391,7 @@ fn_backup() {
 
     fn_log_info "rsync end"
 
-    # -----------------------------------------------------------------------------
     # Check if we ran out of space
-    # -----------------------------------------------------------------------------
-
     # TODO: find better way to check for out of space condition without parsing log.
     NO_SPACE_LEFT="$(grep "No space left on device (28)\|Result too large (34)" "$TMP_RSYNC_LOG")"
 
@@ -435,9 +416,7 @@ fn_backup() {
     break
   done
 
-  # -----------------------------------------------------------------------------
   # Check whether rsync reported any errors
-  # -----------------------------------------------------------------------------
   if [ -n "$(grep "^rsync:" "$TMP_RSYNC_LOG")" ]; then
     fn_log_warn "Rsync reported a warning."
   fi
@@ -446,15 +425,11 @@ fn_backup() {
     exit 1
   fi
 
-  # -----------------------------------------------------------------------------
   # Add symlink to last successful backup
-  # -----------------------------------------------------------------------------
   rm -f -- "$DEST_FOLDER/latest"
   ln -s -- "$(basename "$DEST")" "$DEST_FOLDER/latest"
 
-  # -----------------------------------------------------------------------------
   # delete expired backups
-  # -----------------------------------------------------------------------------
   if [ "$OPT_KEEP_EXPIRED" != "true" ]; then
     fn_delete_backups
   elif [ ! "$(ls -A $EXPIRED_DIR)" ]; then
@@ -462,24 +437,21 @@ fn_backup() {
     rmdir -- "$EXPIRED_DIR"
   fi
 
-  # -----------------------------------------------------------------------------
   # end backup
-  # -----------------------------------------------------------------------------
   rm -f -- "$INPROGRESS_FILE"
 
   fn_log_info "backup $DEST completed successfully."
 }
 
 # -----------------------------------------------------------------------------
-# main
+# Runtime Configuration
 # -----------------------------------------------------------------------------
 
-# set defaults
-OPT_VERBOSE="false"
-OPT_SYSLOG="false"
-OPT_KEEP_EXPIRED="false"
+# Catch critical events
+trap fn_terminate_script SIGINT
+trap fn_cleanup EXIT
 
-# parse command line arguments
+# Parse command line arguments
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h|--help)
