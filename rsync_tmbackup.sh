@@ -439,7 +439,6 @@ fn_delete_expired_backups() {
 
 # Runs a backup of the source files into the destination.
 # Uses the exclude file if provided to specify which files are backed up.
-# TODO: This function is way too heavy...
 fn_backup() {
   # Prep for backup
   fn_log_info "backup location: $DEST_FOLDER/"
