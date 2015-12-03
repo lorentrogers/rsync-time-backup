@@ -102,6 +102,29 @@ fn_usage() {
   fn_log_info
 }
 
+fn_set_dest_folder() {
+  # check if destination is remote
+  if [[ $1 =~ ([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+):(.+) ]]; then
+    readonly SSH_CMD="ssh"
+    readonly SSH_ARG=""
+    readonly SSH_DEST="${BASH_REMATCH[1]}"
+    readonly DEST_FOLDER="${BASH_REMATCH[2]}"
+  else
+    readonly SSH_CMD=""
+    readonly SSH_ARG=""
+    readonly SSH_DEST=""
+    readonly DEST_FOLDER="$1"
+  fi
+}
+
+fn_run() {
+  if [[ -n $SSH_CMD ]]; then
+    "$SSH_CMD" "$SSH_ARG" "$SSH_DEST" "$@"
+  else
+    eval "$@"
+  fi
+}
+
 fn_parse_date() {
   if [ "$UTC" == "true" ]; then
     local DATE_OPTION="-u"
@@ -116,7 +139,7 @@ fn_parse_date() {
 }
 
 fn_mkdir() {
-  if ! mkdir -p -- "$1"; then
+  if ! fn_run mkdir -p -- "$1"; then
     fn_log_error "creation of directory $1 failed."
     exit 1
   fi
@@ -124,20 +147,21 @@ fn_mkdir() {
 
 fn_find_backups() {
   if [ "$1" == "expired" ]; then
-    if [ -d "$EXPIRED_DIR" ]; then
-      find "$EXPIRED_DIR" -maxdepth 1 -type d -name "????-??-??-??????" | sort -r
+    if fn_run [[ -d $EXPIRED_DIR ]]; then
+      fn_run find "$EXPIRED_DIR" -maxdepth 1 -type d -name "????-??-??-??????" | sort -r
     fi
   else
-    find "$DEST_FOLDER" -maxdepth 1 -type d -name "????-??-??-??????" | sort -r
+    fn_run find "$DEST_FOLDER" -maxdepth 1 -type d -name "????-??-??-??????" | sort -r
   fi
 }
 
 fn_set_backup_marker() {
   if [ "$1" == "UTC" ]; then
-    echo "UTC=true" > "$BACKUP_MARKER_FILE"
+    fn_run echo "UTC=true" > "$BACKUP_MARKER_FILE"
   else
-    echo "UTC=false" > "$BACKUP_MARKER_FILE"
+    fn_run echo "UTC=false" > "$BACKUP_MARKER_FILE"
   fi
+# fn_run SSH TODO for marker
 ( cat <<"__EOF__"
 RETENTION_WIN_ALL="$((4 * 3600))"        # 4 hrs
 RETENTION_WIN_01H="$((1 * 24 * 3600))"   # 24 hrs
@@ -147,7 +171,7 @@ RETENTION_WIN_24H="$((28 * 24 * 3600))"  # 4 weeks
 __EOF__
 ) >> "$BACKUP_MARKER_FILE"
   # since we excute this file, access should be limited
-  chmod 600 $BACKUP_MARKER_FILE
+  fn_run chmod 600 $BACKUP_MARKER_FILE
   fn_log_info "Backup marker $BACKUP_MARKER_FILE created."
 }
 
@@ -155,18 +179,19 @@ fn_check_backup_marker() {
   #
   # TODO: check that the destination supports hard links
   #
-  if [ ! -f "$BACKUP_MARKER_FILE" ]; then
+  if fn_run [[ ! -f $BACKUP_MARKER_FILE ]]; then
     fn_log_error "Destination does not appear to be a backup location - no backup marker file found."
     exit 1
   fi
-  if ! touch -c "$BACKUP_MARKER_FILE" &> /dev/null ; then
+  if ! fn_run touch -c "$BACKUP_MARKER_FILE" &> /dev/null ; then
     fn_log_error "no write permission for this backup location - aborting."
     exit 1
   fi
   if [ -z "$CONFIG_IMPORTED" ]; then
     CONFIG_IMPORTED=true
-    if [ -n "$(cat "$BACKUP_MARKER_FILE")" ]; then
+    if [ -n "$(fn_run cat "$BACKUP_MARKER_FILE")" ]; then
       # read backup configuration from backup marker
+      ## TODO: fn_run SSH how to read marker
       source "$BACKUP_MARKER_FILE"
       fn_log_info "configuration imported from backup.marker"
     else
@@ -185,7 +210,7 @@ fn_check_backup_marker() {
 fn_mark_expired() {
   fn_check_backup_marker
   fn_mkdir "$EXPIRED_DIR"
-  mv -- "$1" "$EXPIRED_DIR/"
+  fn_run mv -- "$1" "$EXPIRED_DIR/"
 }
 
 fn_expire_backups() {
@@ -223,10 +248,10 @@ fn_expire_backups() {
       fn_log_warn "Could not parse date: $BACKUP"
       continue
     fi
-    if   [ $BACKUP_TS -ge $LIMIT_ALL_TS ]; then
+    if [ $BACKUP_TS -ge $LIMIT_ALL_TS ]; then
       true
       [ "$OPT_VERBOSE" == "true" ] && fn_log_info "  $BACKUP_DATE ALL retained"
-    elif   [ $BACKUP_TS -ge $LIMIT_1H_TS ]; then
+    elif [ $BACKUP_TS -ge $LIMIT_1H_TS ]; then
       if [ "$BACKUP_DAY" == "$PREV_BACKUP_DAY" ] && \
          [ "$((BACKUP_HOUR / 1))" -eq "$((PREV_BACKUP_HOUR / 1))" ]; then
         fn_mark_expired "$BACKUP"
@@ -272,14 +297,15 @@ fn_expire_backups() {
 fn_delete_backups() {
   fn_check_backup_marker
   local BACKUP
+  # TODO fn_run SSH and ?quotes for $EXPIRED_DIR?
   for BACKUP in $EXPIRED_DIR/* ; do
     # work-around: in case of no match, bash returns "*"
     if [ "$BACKUP" != '*' ] && [ -e "$BACKUP" ]; then
       fn_log_info "deleting expired backup $(basename $BACKUP)"
-      rm -rf -- "$BACKUP"
+      fn_run rm -rf -- "$BACKUP"
     fi
   done
-  rmdir -- "$EXPIRED_DIR"
+  fn_run rmdir -- "$EXPIRED_DIR"
 }
 
 fn_backup() {
@@ -317,18 +343,18 @@ fn_backup() {
   # -----------------------------------------------------------------------------
   PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
 
-  if [ -f "$INPROGRESS_FILE" ]; then
+  if fn_run [[ -f $INPROGRESS_FILE ]]; then
     if pgrep -F "$INPROGRESS_FILE" "$APPNAME" > /dev/null 2>&1 ; then
       fn_log_error "previous backup task is still active - aborting."
       exit 1
     fi
-    echo "$$" > "$INPROGRESS_FILE"
-    if [ -d "$PREVIOUS_DEST" ]; then
+    fn_run echo "$$" > "$INPROGRESS_FILE"
+    if fn_run [[ -d $PREVIOUS_DEST ]]; then
       fn_log_info "previous backup $PREVIOUS_DEST was interrupted - resuming from there."
 
       # - Last backup is moved to current backup folder so that it can be resumed.
       # - 2nd to last backup becomes last backup.
-      mv -- "$PREVIOUS_DEST" "$DEST"
+      fn_run mv -- "$PREVIOUS_DEST" "$DEST"
       if [ "$(fn_find_backups | wc -l)" -gt 1 ]; then
         PREVIOUS_DEST="$(fn_find_backups | sed -n '2p')"
       else
@@ -336,7 +362,7 @@ fn_backup() {
       fi
     fi
   else
-    echo "$$" > "$INPROGRESS_FILE"
+    fn_run echo "$$" > "$INPROGRESS_FILE"
   fi
 
   # -----------------------------------------------------------------------------
@@ -355,7 +381,7 @@ fn_backup() {
     # operation. this significantly speeds up backup times!
     # to work rsync needs the following options: --delete --delete-excluded
     fn_log_info "reusing expired backup $(basename $LAST_EXPIRED)"
-    mv "$LAST_EXPIRED" "$DEST"
+    fn_run mv "$LAST_EXPIRED" "$DEST"
   else
     # a new backup directory is needed
     fn_mkdir "$DEST"
@@ -384,14 +410,19 @@ fn_backup() {
       # We've already checked that $EXCLUSION_FILE doesn't contain a single quote
       CMD="$CMD --exclude-from '$EXCLUSION_FILE'"
     fi
-    if [ -n "$PREVIOUS_DEST" ]; then
+    if fn_run [[ -n $PREVIOUS_DEST ]]; then
       # If the path is relative, it needs to be relative to the destination. To keep
       # it simple, just use an absolute path. See http://serverfault.com/a/210058/118679
-      PREVIOUS_DEST="$(cd "$PREVIOUS_DEST"; pwd)"
+      PREVIOUS_DEST="$(fn_run cd "$PREVIOUS_DEST"; pwd)"
       fn_log_info "doing incremental backup from $(basename $PREVIOUS_DEST)"
       CMD="$CMD --link-dest='$PREVIOUS_DEST'"
     fi
-    CMD="$CMD -- '$SRC_FOLDER/' '$DEST/'"
+    CMD="$CMD -- '$SRC_FOLDER/'"
+    if [[ -n $SSH_CMD ]]; then
+      CMD="$CMD '$SSH_DEST:$DEST/'"
+    else
+      CMD="$CMD '$DEST/'"
+    fi
 
     fn_log_info "backup name $(basename $DEST)"
     fn_log_info "rsync start"
@@ -449,23 +480,23 @@ fn_backup() {
   # -----------------------------------------------------------------------------
   # Add symlink to last successful backup
   # -----------------------------------------------------------------------------
-  rm -f -- "$DEST_FOLDER/latest"
-  ln -s -- "$(basename "$DEST")" "$DEST_FOLDER/latest"
+  fn_run rm -f -- "$DEST_FOLDER/latest"
+  fn_run ln -s -- "$(basename "$DEST")" "$DEST_FOLDER/latest"
 
   # -----------------------------------------------------------------------------
   # delete expired backups
   # -----------------------------------------------------------------------------
   if [ "$OPT_KEEP_EXPIRED" != "true" ]; then
     fn_delete_backups
-  elif [ ! "$(ls -A $EXPIRED_DIR)" ]; then
+  elif fn_run [[ ! $(ls -A $EXPIRED_DIR) ]]; then
     # remove empty expired directory in any case
-    rmdir -- "$EXPIRED_DIR"
+    fn_run rmdir -- "$EXPIRED_DIR"
   fi
 
   # -----------------------------------------------------------------------------
   # end backup
   # -----------------------------------------------------------------------------
-  rm -f -- "$INPROGRESS_FILE"
+  fn_run rm -f -- "$INPROGRESS_FILE"
 
   fn_log_info "backup $DEST completed successfully."
 }
@@ -505,8 +536,8 @@ while [ "$#" -gt 0 ]; do
         fn_log_error "Wrong number of arguments for command '$1'."
         exit 1
       fi
-      readonly DEST_FOLDER="${2%/}"
-      if [ ! -d "$DEST_FOLDER" ]; then
+      fn_set_dest_folder "${2%/}"
+      if fn_run [[ ! -d $DEST_FOLDER ]]; then
         fn_log_error "backup location $DEST_FOLDER does not exist"
         exit 1
       fi
@@ -525,9 +556,9 @@ while [ "$#" -gt 0 ]; do
       fi
       LOC1="${2%/}"
       LOC2="${3%/}"
+      # TODO: something needs to be done here
       rsync --dry-run -auvi "$LOC1/" "$LOC2/" | grep -E -v '^sending|^$|^sent.*sec$|^total.*RUN\)'
       exit 0
-
     ;;
     backup)
       if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
@@ -535,13 +566,13 @@ while [ "$#" -gt 0 ]; do
         exit 1
       fi
       readonly SRC_FOLDER="${2%/}"
-      readonly DEST_FOLDER="${3%/}"
+      fn_set_dest_folder "${3%/}"
       readonly EXCLUSION_FILE="$4"
       if [ ! -d "$SRC_FOLDER/" ]; then
         fn_log_error "source location $SRC_FOLDER does not exist."
         exit 1
       fi
-      if [ ! -d "$DEST_FOLDER/" ]; then
+      if fn_run [[ ! -d $DEST_FOLDER ]]; then
         fn_log_error "backup location $DEST_FOLDER does not exist."
         exit 1
       fi
