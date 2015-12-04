@@ -156,20 +156,20 @@ fn_find_backups() {
 }
 
 fn_set_backup_marker() {
+  local DEFAULT_CONFIG=$(sed -E 's/^[[:space:]]+//' <<-"__EOF__"
+    RETENTION_WIN_ALL="$((4 * 3600))"        # 4 hrs
+    RETENTION_WIN_01H="$((1 * 24 * 3600))"   # 24 hrs
+    RETENTION_WIN_04H="$((3 * 24 * 3600))"   # 3 days
+    RETENTION_WIN_08H="$((14 * 24 * 3600))"  # 2 weeks
+    RETENTION_WIN_24H="$((28 * 24 * 3600))"  # 4 weeks
+    __EOF__
+  )
   if [ "$1" == "UTC" ]; then
-    fn_run echo "UTC=true" > "$BACKUP_MARKER_FILE"
+    DEFAULT_CONFIG=$(printf "UTC=true\n$DEFAULT_CONFIG")
   else
-    fn_run echo "UTC=false" > "$BACKUP_MARKER_FILE"
+    DEFAULT_CONFIG=$(printf "UTC=false\n$DEFAULT_CONFIG")
   fi
-# fn_run SSH TODO for marker
-( cat <<"__EOF__"
-RETENTION_WIN_ALL="$((4 * 3600))"        # 4 hrs
-RETENTION_WIN_01H="$((1 * 24 * 3600))"   # 24 hrs
-RETENTION_WIN_04H="$((3 * 24 * 3600))"   # 3 days
-RETENTION_WIN_08H="$((14 * 24 * 3600))"  # 2 weeks
-RETENTION_WIN_24H="$((28 * 24 * 3600))"  # 4 weeks
-__EOF__
-) >> "$BACKUP_MARKER_FILE"
+  fn_run echo "$DEFAULT_CONFIG" >> "$BACKUP_MARKER_FILE"
   # since we excute this file, access should be limited
   fn_run chmod 600 $BACKUP_MARKER_FILE
   fn_log_info "Backup marker $BACKUP_MARKER_FILE created."
@@ -189,10 +189,9 @@ fn_check_backup_marker() {
   fi
   if [ -z "$CONFIG_IMPORTED" ]; then
     CONFIG_IMPORTED=true
-    if [ -n "$(fn_run cat "$BACKUP_MARKER_FILE")" ]; then
+    if [[ -n $(fn_run cat "$BACKUP_MARKER_FILE") ]]; then
       # read backup configuration from backup marker
-      ## TODO: fn_run SSH how to read marker
-      source "$BACKUP_MARKER_FILE"
+      eval "$(fn_run cat "$BACKUP_MARKER_FILE")"
       fn_log_info "configuration imported from backup.marker"
     else
       fn_log_info "no configuration imported from backup marker - using defaults"
@@ -297,8 +296,7 @@ fn_expire_backups() {
 fn_delete_backups() {
   fn_check_backup_marker
   local BACKUP
-  # TODO fn_run SSH and ?quotes for $EXPIRED_DIR?
-  for BACKUP in $EXPIRED_DIR/* ; do
+  for BACKUP in $(fn_find_backups expired) ; do
     # work-around: in case of no match, bash returns "*"
     if [ "$BACKUP" != '*' ] && [ -e "$BACKUP" ]; then
       fn_log_info "deleting expired backup $(basename $BACKUP)"
@@ -556,7 +554,7 @@ while [ "$#" -gt 0 ]; do
       fi
       LOC1="${2%/}"
       LOC2="${3%/}"
-      # TODO: something needs to be done here
+      # TODO: something needs to be done here for ssh support
       rsync --dry-run -auvi "$LOC1/" "$LOC2/" | grep -E -v '^sending|^$|^sent.*sec$|^total.*RUN\)'
       exit 0
     ;;
