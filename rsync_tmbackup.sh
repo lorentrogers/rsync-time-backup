@@ -319,7 +319,11 @@ fn_backup() {
   # ---------------------------------------------------------------------------
   # Check that the destination directory is a backup location
   # ---------------------------------------------------------------------------
-  fn_log_info "backup location: $DEST_FOLDER/"
+  if [[ -n $SSH_CMD ]]; then
+    fn_log_info "backup location: $SSH_DEST:$DEST_FOLDER/"
+  else
+    fn_log_info "backup location: $DEST_FOLDER/"
+  fi
   fn_log_info "backup source path: $SRC_FOLDER/"
   readonly BACKUP_MARKER_FILE="$DEST_FOLDER/backup.marker"
   # this function sets variable $UTC dependent on backup marker content
