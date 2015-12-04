@@ -178,6 +178,8 @@ fn_set_backup_marker() {
     # since we excute this file, access should be limited
     fn_run_cmd "chmod 600 $BACKUP_MARKER_FILE"
     fn_log_info "Backup marker $BACKUP_MARKER_FILE created."
+  else
+    fn_log_info "Backup marker $BACKUP_MARKER_FILE exists."
   fi
 }
 
@@ -223,6 +225,7 @@ fn_check_backup_marker() {
 
     fn_log_info "Setting marker defaults if needed..."
     # set defaults if missing - compatibility with old backups
+    # TODO: Should use default marker file values instead of hard-coded ones.
     [ -z "$UTC" ] && UTC="false"
     [ -z "$RETENTION_WIN_ALL" ] && RETENTION_WIN_ALL="$((4 * 3600))"
     [ -z "$RETENTION_WIN_01H" ] && RETENTION_WIN_01H="$((1 * 24 * 3600))"
@@ -621,7 +624,7 @@ while [ "$#" -gt 0 ]; do
         exit 1
       fi
       readonly SRC_FOLDER="${2%/}"
-      readonly DEST_FOLDER="${3%/}"
+      fn_set_dest_folder "${3%/}"
       readonly EXCLUSION_FILE="$4"
       fn_backup_sanity_check
       fn_backup
