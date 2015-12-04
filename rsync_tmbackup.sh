@@ -119,7 +119,11 @@ fn_set_dest_folder() {
 
 fn_run() {
   if [[ -n $SSH_CMD ]]; then
-    "$SSH_CMD" "$SSH_ARG" "$SSH_DEST" "$@"
+    if [[ -n $SSH_ARG ]]; then
+      "$SSH_CMD" "$SSH_ARG" "$SSH_DEST" "$@"
+    else
+      "$SSH_CMD" "$SSH_DEST" "$@"
+    fi
   else
     eval "$@"
   fi
@@ -169,7 +173,7 @@ __EOF__
   else
     DEFAULT_CONFIG=$(printf "UTC=false\n$DEFAULT_CONFIG")
   fi
-  fn_run "echo $DEFAULT_CONFIG >> $BACKUP_MARKER_FILE"
+  fn_run "echo '$DEFAULT_CONFIG' >> '$BACKUP_MARKER_FILE'"
   # since we excute this file, access should be limited
   fn_run chmod 600 $BACKUP_MARKER_FILE
   fn_log_info "Backup marker $BACKUP_MARKER_FILE created."
@@ -346,7 +350,7 @@ fn_backup() {
       fn_log_error "previous backup task is still active - aborting."
       exit 1
     fi
-    fn_run "echo $$ > $INPROGRESS_FILE"
+    fn_run "echo '$$' > '$INPROGRESS_FILE'"
     if fn_run "[ -d '$PREVIOUS_DEST' ]"; then
       fn_log_info "previous backup $PREVIOUS_DEST was interrupted - resuming from there."
 
@@ -360,7 +364,7 @@ fn_backup() {
       fi
     fi
   else
-    fn_run "echo $$ > $INPROGRESS_FILE"
+    fn_run "echo '$$' > '$INPROGRESS_FILE'"
   fi
 
   # -----------------------------------------------------------------------------
