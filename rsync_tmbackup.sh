@@ -307,7 +307,11 @@ fn_delete_backups() {
       fn_run rm -rf -- "$BACKUP"
     fi
   done
-  fn_run rmdir -- "$EXPIRED_DIR"
+  if [[ -z $(fn_find_backups expired) ]]; then
+    if fn_run "[ -d '$EXPIRED_DIR' ]"; then
+      fn_run rmdir -- "$EXPIRED_DIR"
+    fi
+  fi
 }
 
 fn_backup() {
@@ -415,7 +419,7 @@ fn_backup() {
     if fn_run "[ -n '$PREVIOUS_DEST' ]"; then
       # If the path is relative, it needs to be relative to the destination. To keep
       # it simple, just use an absolute path. See http://serverfault.com/a/210058/118679
-      PREVIOUS_DEST="$(fn_run cd "$PREVIOUS_DEST"; pwd)"
+      PREVIOUS_DEST="$(fn_run "cd '$PREVIOUS_DEST'; pwd")"
       fn_log_info "doing incremental backup from $(basename $PREVIOUS_DEST)"
       CMD="$CMD --link-dest='$PREVIOUS_DEST'"
     fi
@@ -491,8 +495,9 @@ fn_backup() {
   if [ "$OPT_KEEP_EXPIRED" != "true" ]; then
     fn_delete_backups
   elif [[ -z $(fn_find_backups expired) ]]; then
-    # remove empty expired directory in any case
-    fn_run rmdir -- "$EXPIRED_DIR"
+    if fn_run "[ -d '$EXPIRED_DIR' ]"; then
+      fn_run rmdir -- "$EXPIRED_DIR"
+    fi
   fi
 
   # -----------------------------------------------------------------------------
