@@ -346,7 +346,7 @@ fn_backup() {
       fn_log_error "previous backup task is still active - aborting."
       exit 1
     fi
-    fn_run echo "$$" > "$INPROGRESS_FILE"
+    fn_run "echo $$ > $INPROGRESS_FILE"
     if fn_run "[ -d '$PREVIOUS_DEST' ]"; then
       fn_log_info "previous backup $PREVIOUS_DEST was interrupted - resuming from there."
 
@@ -360,7 +360,7 @@ fn_backup() {
       fi
     fi
   else
-    fn_run echo "$$" > "$INPROGRESS_FILE"
+    fn_run "echo $$ > $INPROGRESS_FILE"
   fi
 
   # -----------------------------------------------------------------------------
