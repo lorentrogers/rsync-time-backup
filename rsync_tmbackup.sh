@@ -147,7 +147,7 @@ fn_mkdir() {
 
 fn_find_backups() {
   if [ "$1" == "expired" ]; then
-    if fn_run [[ -d $EXPIRED_DIR ]]; then
+    if fn_run "[ -d '$EXPIRED_DIR' ]"; then
       fn_run find "$EXPIRED_DIR" -maxdepth 1 -type d -name "????-??-??-??????" | sort -r
     fi
   else
@@ -169,7 +169,7 @@ __EOF__
   else
     DEFAULT_CONFIG=$(printf "UTC=false\n$DEFAULT_CONFIG")
   fi
-  fn_run echo "$DEFAULT_CONFIG" >> "$BACKUP_MARKER_FILE"
+  fn_run "echo $DEFAULT_CONFIG >> $BACKUP_MARKER_FILE"
   # since we excute this file, access should be limited
   fn_run chmod 600 $BACKUP_MARKER_FILE
   fn_log_info "Backup marker $BACKUP_MARKER_FILE created."
@@ -179,7 +179,7 @@ fn_check_backup_marker() {
   #
   # TODO: check that the destination supports hard links
   #
-  if fn_run [[ ! -f $BACKUP_MARKER_FILE ]]; then
+  if fn_run "[ ! -f '$BACKUP_MARKER_FILE' ]"; then
     fn_log_error "Destination does not appear to be a backup location - no backup marker file found."
     exit 1
   fi
@@ -341,13 +341,13 @@ fn_backup() {
   # -----------------------------------------------------------------------------
   PREVIOUS_DEST="$(fn_find_backups | head -n 1)"
 
-  if fn_run [[ -f $INPROGRESS_FILE ]]; then
+  if fn_run "[ -f '$INPROGRESS_FILE' ]"; then
     if pgrep -F "$INPROGRESS_FILE" "$APPNAME" > /dev/null 2>&1 ; then
       fn_log_error "previous backup task is still active - aborting."
       exit 1
     fi
     fn_run echo "$$" > "$INPROGRESS_FILE"
-    if fn_run [[ -d $PREVIOUS_DEST ]]; then
+    if fn_run "[ -d '$PREVIOUS_DEST' ]"; then
       fn_log_info "previous backup $PREVIOUS_DEST was interrupted - resuming from there."
 
       # - Last backup is moved to current backup folder so that it can be resumed.
@@ -408,7 +408,7 @@ fn_backup() {
       # We've already checked that $EXCLUSION_FILE doesn't contain a single quote
       CMD="$CMD --exclude-from '$EXCLUSION_FILE'"
     fi
-    if fn_run [[ -n $PREVIOUS_DEST ]]; then
+    if fn_run "[ -n '$PREVIOUS_DEST' ]"; then
       # If the path is relative, it needs to be relative to the destination. To keep
       # it simple, just use an absolute path. See http://serverfault.com/a/210058/118679
       PREVIOUS_DEST="$(fn_run cd "$PREVIOUS_DEST"; pwd)"
@@ -486,7 +486,7 @@ fn_backup() {
   # -----------------------------------------------------------------------------
   if [ "$OPT_KEEP_EXPIRED" != "true" ]; then
     fn_delete_backups
-  elif fn_run [[ ! $(ls -A $EXPIRED_DIR) ]]; then
+  elif [[ -z $(fn_find_backups expired) ]]; then
     # remove empty expired directory in any case
     fn_run rmdir -- "$EXPIRED_DIR"
   fi
@@ -535,7 +535,7 @@ while [ "$#" -gt 0 ]; do
         exit 1
       fi
       fn_set_dest_folder "${2%/}"
-      if fn_run [[ ! -d $DEST_FOLDER ]]; then
+      if fn_run "[ ! -d '$DEST_FOLDER' ]"; then
         fn_log_error "backup location $DEST_FOLDER does not exist"
         exit 1
       fi
@@ -570,7 +570,7 @@ while [ "$#" -gt 0 ]; do
         fn_log_error "source location $SRC_FOLDER does not exist."
         exit 1
       fi
-      if fn_run [[ ! -d $DEST_FOLDER ]]; then
+      if fn_run "[ ! -d '$DEST_FOLDER' ]"; then
         fn_log_error "backup location $DEST_FOLDER does not exist."
         exit 1
       fi
