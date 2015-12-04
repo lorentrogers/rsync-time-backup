@@ -156,13 +156,13 @@ fn_find_backups() {
 }
 
 fn_set_backup_marker() {
-  local DEFAULT_CONFIG=$(sed -E 's/^[[:space:]]+//' <<-"__EOF__"
+  local DEFAULT_CONFIG=$(sed -E 's/^[[:space:]]+//' <<"__EOF__"
     RETENTION_WIN_ALL="$((4 * 3600))"        # 4 hrs
     RETENTION_WIN_01H="$((1 * 24 * 3600))"   # 24 hrs
     RETENTION_WIN_04H="$((3 * 24 * 3600))"   # 3 days
     RETENTION_WIN_08H="$((14 * 24 * 3600))"  # 2 weeks
     RETENTION_WIN_24H="$((28 * 24 * 3600))"  # 4 weeks
-    __EOF__
+__EOF__
   )
   if [ "$1" == "UTC" ]; then
     DEFAULT_CONFIG=$(printf "UTC=true\n$DEFAULT_CONFIG")
