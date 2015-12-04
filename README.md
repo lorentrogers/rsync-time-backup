@@ -47,6 +47,15 @@ Options:
       this help text
 ```
 
+### backup over SSH example
+
+To backup to a remote destination, start by setting up key-based authentication between client and server. Passwords won't work here.
+Only remote backup locations are supported. Remote sources won't make any sense.
+
+Destinations must be in the form of <user>@<host>:<directory>.
+
+	rsync_tmbackup.sh backup /path/to/source user@host:/path/to/backup
+
 ### crontab example
 
 	# backup /home at quarter past every hour to /mnt/backup
