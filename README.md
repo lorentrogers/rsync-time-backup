@@ -47,14 +47,24 @@ Options:
       this help text
 ```
 
-### backup over SSH example
+### local backup example
 
-To backup to a remote destination, start by setting up key-based authentication between client and server. Passwords won't work here. Only remote backup locations are supported. Remote sources won't make any sense.
+	# setup backup location
+	rsync_tmbackup.sh init user@host:/path/to/backup
+
+	# backup all files from source except those mentioned in the backup.exlude file
+	rsync_tmbackup.sh backup /path/to/source /path/to/backup /path/to/backup/backup.exclude
+
+### remote backup example
+
+To backup to a remote server you need ssh key-based authentication between client and server. Backup source has to be local.
 
 	# destinations must be in the form of <user>@<host>:<directory>
 	rsync_tmbackup.sh backup /path/to/source user@host:/path/to/backup
 
 ### crontab example
+
+You can log everything to syslog by using "-s" or "--syslog".
 
 	# backup /home at quarter past every hour to /mnt/backup
 	15 * * * * rsync_tmbackup.sh -v -s -k backup /home /mnt/backup /mnt/backup/backup.exclude
