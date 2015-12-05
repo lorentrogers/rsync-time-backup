@@ -50,7 +50,7 @@ Options:
 ### local backup example
 
 	# setup backup location
-	rsync_tmbackup.sh init user@host:/path/to/backup
+	rsync_tmbackup.sh init /path/to/backup
 
 	# backup all files from source except those mentioned in the backup.exlude file
 	rsync_tmbackup.sh backup /path/to/source /path/to/backup /path/to/backup/backup.exclude
